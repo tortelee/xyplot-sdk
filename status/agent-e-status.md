@@ -1,7 +1,7 @@
 # Agent E 状态 — 后端 & 集成
 
-**最后更新**: 2026-05-31 §14 Bug 修复完成
-**当前阶段**: §14 Bug 修复
+**最后更新**: 2026-05-31 §15 Bug 修复 #2 完成
+**当前阶段**: §15 Bug 修复
 **状态**: 🟢 正常
 
 ---
@@ -21,6 +21,9 @@
 - [x] **BUG-002**: 8 种 `add*Series()` 便捷方法 (plot.h + plot.cpp) ✅
 - [x] **BUG-003**: `addLineSeries`/`addScatterSeries` yAxisIndex 参数 ✅
 - [x] 回归测试 3 项 ✅
+
+### §15 Bug 修复 #2
+- [x] **BUG-005**: X轴标签间距 — `pr.y + pr.h + 4` → `pr.y + pr.h + tickFont.size + 6` (16px gap ≥ 15px 要求) ✅
 
 ## §14 变更详情
 
@@ -48,7 +51,8 @@ Line → Line, Scatter, Bar, Step, Area, Histogram, ErrorBar, Polar, Heatmap, Co
 
 | 时间 | 结果 |
 |------|------|
-| §14 最终 | ✅ **163/163 全部通过** |
+| §14 最终 | ✅ 163/163 |
+| §15 BUG-005 | ✅ 163/163 零回归 |
 
 ## 测试增长轨迹
 

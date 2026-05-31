@@ -14,10 +14,45 @@
 | BUG-002 | Bar chart 显示为曲线 | 🔴 P0 | 🟢 已修复 | 客户 | 2026-05-31 | Agent E + Agent D |
 | BUG-003 | Multi-axis 不显示 | 🔴 P0 | 🟢 已修复 | 客户 | 2026-05-31 | Agent E |
 | BUG-004 | gallery SVG 不设 canvasSize | 🟡 P1 | 🟢 已修复 | 内部 | 2026-05-31 | Agent F |
+| BUG-005 | X轴标签与轴线重叠 | 🔴 P0 | 🟢 已修复 | 客户 | 2026-05-31 | Agent E |
+| BUG-006 | Polar 图例与曲线颜色不一致 | 🔴 P0 | 🟢 已修复 | 客户 | 2026-05-31 | Agent D |
+| BUG-007 | Scatter 连成曲线而非散点 | 🔴 P0 | 🟢 已修复 | 客户 | 2026-05-31 | Agent D |
 
 ---
 
-## BUG-001：X 轴不显示
+## BUG-005：X轴刻度标签与轴线重叠
+
+**发现**：客户查看 SVG，X 轴数字 "横插在轴线上"。
+
+**根因**：轴刻度标签 Y 坐标与轴线 Y 坐标间距仅 4px（轴线 y=445，标签 y=449），视觉上标签压在轴线上。`plot.cpp` 中刻度标签的 Y 位置计算未留足间距——应该在轴线下方至少 12-15px。
+
+**修复方案**：`plot.cpp` 中 X 轴刻度标签绘制时，Y 坐标从 `xAxisTop + tickLength + gap` 改为 `xAxisTop + tickLength + fontSize + gap`。参考值：tickLength=5px, fontSize=10px, gap=3px → 标签基线应在轴线下方 ~18px。
+
+**验证**：SVG 中 X 轴刻度标签的 Y 坐标 − X 轴线 Y 坐标 ≥ 15px。
+
+---
+
+## BUG-006：Polar 图颜色不匹配
+
+**发现**：客户看到 legend 示意蓝色，但实际曲线是黑色。
+
+**根因**：Polar plot 的 SVG 中有两组渲染：polyline（`stroke="rgb(31,119,180)"` 蓝色）和 circle markers（`fill="rgb(0,0,0)"` 黑色）。曲线颜色是正确的蓝色，但叠加在曲线上的数据点标记是黑色。Legend 的色块是蓝色，与曲线一致，但与客户看到的标记点颜色不一致。问题出在 `polar_plot.cpp` 渲染时 marker 使用了默认 MarkerStyle（fillColor={0,0,0}）而非从 series 继承颜色。
+
+**修复方案**：`polar_plot.cpp` 中渲染 markers 时，从 `data.lineStyle.color` 继承 fillColor 和 edgeColor（与 `scatter_plot.cpp` 相同的逻辑）。
+
+**验证**：SVG 中 circle 元素的 fill 和 stroke 颜色与 legend 色块颜色一致。
+
+---
+
+## BUG-007：Scatter plot 显示为连线
+
+**发现**：客户查看 `02_scatter_plot.svg`，散点图显示为连线而非独立散点。
+
+**根因**：`src/scatter_plot.cpp:53-58` 在 `drawMarkers()` 之后额外调用了 `drawPolyline()`，将所有散点用线连起来。这导致 Scatter plot 变成了 "散点 + 连线"，客户看到的是连线而非独立散点。
+
+**修复方案**：移除 `scatter_plot.cpp` 中连接散点的 `drawPolyline()` 调用。若需要连线，应由用户显式调用 `addLineSeries` 叠加。散点图默认只画标记点。
+
+**验证**：`02_scatter_plot.svg` 中 polyline 元素仅来自网格线和轴线（不来自数据），circle 元素数量 = 数据点数。
 
 **发现**：客户查看 SVG demo，X 轴线不可见。
 

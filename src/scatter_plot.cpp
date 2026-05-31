@@ -51,12 +51,6 @@ public:
         }
 
         device.drawMarkers(dx.data(), dy.data(), data.count, style);
-
-        // 3. 可选：绘制连接线（若 lineStyle.width > 0）
-        if (data.lineStyle.width > 0.0 && data.count > 1) {
-            device.drawPolyline(dx.data(), dy.data(), data.count,
-                              data.lineStyle);
-        }
     }
 };
 

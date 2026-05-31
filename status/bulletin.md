@@ -1,27 +1,17 @@
 # 📋 Project Lead 公告板
 
-**最后更新**: Bug 修复启动
-**状态**: 🔴 3 个客户 Bug 待修复
+**状态**: 🔴 3 个新 Bug 待修复（客户第二轮反馈）
 
 ---
 
-## 活跃指令：Bug 修复
+## 活跃指令：Bug 修复 #2
 
-**Bug 跟踪**: [`docs/08-bug-tracker.md`](../docs/08-bug-tracker.md)
-**修复指令**: [`docs/07-agent-coordination.md`](../docs/07-agent-coordination.md) §14
+**Bug 跟踪**: `docs/08-bug-tracker.md` (BUG-005/006/007)
+**修复指令**: `docs/07-agent-coordination.md` §15
 
-| Bug | 现象 | 负责 |
-|-----|------|------|
-| BUG-001 | X 轴不显示（canvas 尺寸不匹配） | Agent E |
-| BUG-002 | Bar chart 显示为曲线（缺 API） | Agent E + Agent D |
-| BUG-003 | Multi-axis 不显示（缺右轴绑定） | Agent E |
-
-| Agent | 任务 |
-|-------|------|
-| **Agent E** | Plot API 扩展: setCanvasSize + addBarSeries 等 + yAxisIndex + 回归测试 |
-| **Agent D** | render() 中按 SeriesType 分发到 IPlotType |
-| **Agent F** | Gallery 改用新 API + setCanvasSize |
-| **Agent B** | 最终 gate-check --full |
-| **Agent A** | API 变更审核 |
-
-**预计 1.5h 全部修复。**
+| Bug | 负责 | 文件 | 预计 |
+|-----|------|------|------|
+| BUG-005 X轴标签压线 | **Agent E** | plot.cpp | 10min |
+| BUG-006 Polar 颜色不匹配 | **Agent D** | polar_plot.cpp | 10min |
+| BUG-007 Scatter 连成线 | **Agent D** | scatter_plot.cpp | 5min |
+| 验证 | **Agent B** | gate-check | 10min |

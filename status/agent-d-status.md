@@ -1,7 +1,7 @@
 # Agent D 状态 — 图类型
 
-**最后更新**: 2026-05-31 — §14 Bug 修复完成
-**当前阶段**: Phase B 完成 → 收敛
+**最后更新**: 2026-05-31 — §15 Bug 修复 #2 完成
+**当前阶段**: 收敛
 **状态**: 🟢 正常
 
 ---
@@ -41,12 +41,27 @@ render() 中每个 series:
   回退: 未知类型 → transformPoints + drawPolyline
 ```
 
+## §15 Bug 修复 #2（客户第二轮反馈）
+
+| Bug | 文件 | 修复 |
+|-----|------|------|
+| BUG-006 | src/polar_plot.cpp | Marker 颜色继承: 默认 fillColor/edgeColor → lineStyle.color (与 scatter_plot.cpp 对齐) |
+| BUG-007 | src/scatter_plot.cpp | 删除 drawPolyline 块 (5行): 散点不再连成曲线 |
+
+### 修改文件 (§15)
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| src/polar_plot.cpp | 修改 | +8 行: BUG-006 — 从 lineStyle.color 继承 marker fill/edge 颜色 |
+| src/scatter_plot.cpp | 修改 | -5 行: BUG-007 — 删除 drawPolyline 连接散点的代码 |
+| tests/test_plots.cpp | 修改 | -1/+1 行: `test_scatter_plot_with_line` 断言修正 (drawPolyline ≥1 → ==0) |
+
 ## Gate Check (最终)
 
 | 时间 | 结果 |
 |------|------|
-| §14 build | ✅ 14 targets, 0 warnings, 0 errors |
-| §14 full test | ✅ **9/9 passed, 0 failures — 100%** |
+| §15 build | ✅ 43 targets, 0 warnings, 0 errors |
+| §15 full test | ✅ **9/9 passed, 0 failures — 100%** |
 | interface_contract_compile | ✅ |
 | test_axis | ✅ |
 | test_contour | ✅ (之前 2 failures 已修复) |
@@ -70,6 +85,7 @@ render() 中每个 series:
 - [x] B1: Bar / Step / ErrorBar / Histogram / Polar
 - [x] B2: Area / Heatmap / Contour
 - [x] **§14: render() 类型分发** ✅
+- [x] **§15: BUG-006 Polar 颜色继承 + BUG-007 Scatter 去连线** ✅
 
 ## 备注
 

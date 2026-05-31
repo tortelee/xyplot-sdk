@@ -396,9 +396,9 @@ void test_scatter_plot_with_line() {
 
     plot->render(device, data, axis, area);
 
-    // 有线宽的 ScatterPlot 应同时绘制标记和连接线
+    // BUG-007 fix: Scatter 只绘制标记，不连成线
     assert(device.drawMarkersCalls >= 1);
-    assert(device.drawPolylineCalls >= 1);
+    assert(device.drawPolylineCalls == 0);
 }
 
 // ============================================================

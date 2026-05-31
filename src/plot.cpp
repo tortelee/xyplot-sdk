@@ -430,7 +430,8 @@ void Plot::render(IRenderDevice& device) {
     for (size_t i = 0; i < xTicks.majorTicks.size(); i++) {
         double dx = transform(xTicks.majorTicks[i], m_impl->xMin, m_impl->xMax,
                               pr.x, pr.x + pr.w, m_impl->xScale);
-        device.drawText(dx, pr.y + pr.h + 4,
+        // BUG-005 fix: gap = tickLength(5) + fontSize(10) + 6 = 21px
+        device.drawText(dx, pr.y + pr.h + tickFont.size + 6,
                         xTicks.labels[i].c_str(), tickFont, tickStyle);
     }
 

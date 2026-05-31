@@ -83,8 +83,18 @@ public:
 
         // 5. 如果有关闭标记且数据形成闭环，叠加标记
         if (data.markerStyle.size > 0.0) {
-            device.drawMarkers(dx.data(), dy.data(), data.count,
-                              data.markerStyle);
+            MarkerStyle style = data.markerStyle;
+            // 从 lineStyle.color 继承颜色 (BUG-006 fix)
+            if (style.fillColor.r == 0 && style.fillColor.g == 0 &&
+                style.fillColor.b == 0 && style.fillColor.a == 255) {
+                style.fillColor = data.lineStyle.color;
+                style.fillColor.a = 200;
+            }
+            if (style.edgeColor.r == 0 && style.edgeColor.g == 0 &&
+                style.edgeColor.b == 0 && style.edgeColor.a == 255) {
+                style.edgeColor = data.lineStyle.color;
+            }
+            device.drawMarkers(dx.data(), dy.data(), data.count, style);
         }
     }
 };

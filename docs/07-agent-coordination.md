@@ -946,3 +946,103 @@ Agent C/D/E/F 全部完成后:
 | 回归 | gate-check --full 全部通过 |
 | Gallery | 全部 8 张 SVG 可用浏览器正常查看 |
 | 破坏性变更 | 0 | 0 | 0 |
+
+---
+
+## 十五、Bug 修复 #2（客户第二轮反馈）
+
+**Bug 跟踪**：[`docs/08-bug-tracker.md`](./08-bug-tracker.md)
+**执行时间**：立即
+
+### ⚠️ 本阶段所有 Agent 注意
+
+**完成任务 ≠ 写完代码。做完后必须做以下 3 件事，否则 Project Lead 不知道你完成了：**
+
+1. 本地运行 `bash scripts/gate-check.sh`（或 cmake --build build && ctest）
+2. **更新 `status/agent-X-status.md`**：勾选已完成的任务，填写 Gate Check 结果
+3. 如果任务失败或被阻塞，状态改为 🔴 并写"阻塞项"
+
+---
+
+### 15.1 Bug 概述
+
+| Bug | 现象 | 根因 | 文件 |
+|-----|------|------|------|
+| BUG-005 | X轴数字压在轴线上 | 刻度标签 Y 与轴线 Y 仅差 4px | plot.cpp |
+| BUG-006 | Polar 图例蓝色，曲线黑色 | marker 用了默认色 {0,0,0} 而非继承 lineStyle | polar_plot.cpp |
+| BUG-007 | Scatter 连成曲线 | scatter_plot.cpp 额外调了 drawPolyline | scatter_plot.cpp |
+
+### 15.2 任务分配
+
+---
+
+**Agent E — BUG-005: X轴标签间距** (P0, 10min)
+
+```
+文件: src/plot.cpp
+
+找到 X 轴刻度标签绘制代码，将标签 Y 坐标从:
+  y = xAxisLineY + tickLength + 2   // 仅 4-5px 间距
+改为:
+  y = xAxisLineY + tickLength + tickFontSize + 4  // ~18px 间距
+
+参考计算: 轴线 y=445, tickLength=5, fontSize=10, gap=4
+         → 标签 y = 445 + 5 + 10 + 4 = 464
+
+验证: 重新生成 gallery，X 轴标签 Y − 轴线 Y ≥ 15px
+
+⚠️ 完成后必须: 更新 status/agent-e-status.md，勾选任务 + 标注 Gate Check 结果
+```
+
+**Agent D — BUG-006: Polar 颜色继承** (P0, 10min)
+
+```
+文件: src/polar_plot.cpp
+
+问题: 渲染 markers 时使用默认 MarkerStyle (fillColor={0,0,0})
+修复: 与 scatter_plot.cpp 一样，从 data.lineStyle.color 继承:
+  MarkerStyle style = data.markerStyle;
+  if (style.fillColor.r == 0 && style.fillColor.g == 0 && style.fillColor.b == 0) {
+      style.fillColor = data.lineStyle.color;
+      style.fillColor.a = 200;
+  }
+  if (style.edgeColor.r == 0 && style.edgeColor.g == 0 && style.edgeColor.b == 0) {
+      style.edgeColor = data.lineStyle.color;
+  }
+
+验证: SVG 中 circle fill/stroke = legend 色块颜色
+
+⚠️ 完成后必须: 更新 status/agent-d-status.md，勾选任务 + 标注 Gate Check 结果
+```
+
+**Agent D — BUG-007: Scatter 去连线** (P0, 5min)
+
+```
+文件: src/scatter_plot.cpp:53-58
+
+删除 drawPolyline 调用（将散点连成线的代码块）。
+保留 drawMarkers 调用。
+
+验证: 02_scatter_plot.svg 中无数据 polyline（仅网格/轴线允许）
+
+⚠️ 完成后必须: 更新 status/agent-d-status.md，勾选任务 + 标注 Gate Check 结果
+```
+
+**Agent B — 最终验证** (P0, 10min)
+
+```
+Agent E/D 完成后:
+  cmake --build build && ctest --output-on-failure
+  ./build/svg_gallery
+  grep 验证: BUG-005 Y gap ≥ 15, BUG-006 circle fill ≠ black, BUG-007 scatter polyline=0
+
+⚠️ 完成后必须: 更新 status/agent-b-status.md，写入验证结果
+```
+
+### 15.3 验收
+
+| Bug | 验收标准 |
+|-----|---------|
+| BUG-005 | X 轴标签 Y − 轴线 Y ≥ 15px |
+| BUG-006 | Polar SVG 中 circle fill != "rgb(0,0,0)" |
+| BUG-007 | Scatter SVG 中唯一的 polyline 是网格/轴线 |
