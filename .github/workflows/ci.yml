@@ -1,0 +1,156 @@
+# ============================================================
+# CI Workflow — XYPlot SDK Contract Gate + Full Build
+# ============================================================
+# PO 前提 2: "主分支启用接口契约测试，未通过不得合并。"
+#
+# Gate behavior:
+#   - Triggers on: push to main, PR to main
+#   - Contract gate: build + run test_interface_contract
+#   - Full build: compile all sources across all agents
+#   - Unit tests: run all discovered test targets
+#
+# Owner: Agent B (基础设施)
+# ============================================================
+
+name: XYPlot CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  # ============================================================
+  # Job 1: Contract Gate (BLOCKING — must pass to merge)
+  # ============================================================
+  contract-gate:
+    name: "🔒 Contract Gate (${{ matrix.os }}, ${{ matrix.build_type }})"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        build_type: [Debug, Release]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup ccache (Linux)
+        if: runner.os == 'Linux'
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: ${{ matrix.os }}-${{ matrix.build_type }}
+
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+
+      - name: Build Contract Test (GATE)
+        run: cmake --build build --target test_interface_contract --config ${{ matrix.build_type }}
+
+      - name: Run Contract Test
+        run: |
+          cd build
+          ctest -R interface_contract_compile -C ${{ matrix.build_type }} --output-on-failure
+
+      - name: ✅ Gate Passed
+        if: success()
+        run: echo "✅ Interface contract gate PASSED — IRenderDevice is stable."
+
+      - name: ❌ Gate Failed — Block Merge
+        if: failure()
+        run: |
+          echo "❌ INTERFACE CONTRACT VIOLATION DETECTED"
+          echo ""
+          echo "The contract test failed to compile or run."
+          echo "This BLOCKS MERGE to main."
+          echo ""
+          echo "Possible causes:"
+          echo "  1. A new pure virtual method was added to IRenderDevice"
+          echo "     without updating ContractDevice in test_interface_contract.cpp"
+          echo "  2. A method signature was changed incompatibly"
+          echo "  3. A type in types.h was changed"
+          echo "  4. Plot::render() call pattern changed"
+          echo ""
+          echo "ACTION REQUIRED:"
+          echo "  - Update tests/test_interface_contract.cpp to match"
+          echo "  - OR revert the interface change"
+          echo "  - See docs/interface-freeze.md for the change control policy"
+          echo ""
+          echo "Owner: Agent B (基础设施) — escalate to Project Lead if blocked."
+          exit 1
+
+  # ============================================================
+  # Job 2: Full Build (all sources + all tests)
+  # ============================================================
+  full-build:
+    name: "🏗️ Full Build (${{ matrix.os }}, ${{ matrix.build_type }})"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        build_type: [Debug, Release]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup ccache (Linux)
+        if: runner.os == 'Linux'
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: ${{ matrix.os }}-${{ matrix.build_type }}
+
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+
+      - name: Build All Targets
+        run: cmake --build build --config ${{ matrix.build_type }} -j$(nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
+
+      - name: Run All Tests
+        run: |
+          cd build
+          ctest -C ${{ matrix.build_type }} --output-on-failure
+
+      - name: Upload Build Artifacts (Release only)
+        if: matrix.build_type == 'Release' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xyplot-${{ matrix.os }}-release
+          path: |
+            build/libxyplot.*
+            build/test_interface_contract*
+          retention-days: 7
+
+  # ============================================================
+  # Job 3: Test Summary
+  # ============================================================
+  test-summary:
+    name: "📊 Test Summary"
+    runs-on: ubuntu-latest
+    needs: [contract-gate, full-build]
+    if: always()
+
+    steps:
+      - name: Overall Status
+        run: |
+          echo "═══════════════════════════════════════════"
+          echo " XYPlot SDK CI — Final Status"
+          echo "═══════════════════════════════════════════"
+          echo ""
+          echo "Contract Gate: ${{ needs.contract-gate.result }}"
+          echo "Full Build:    ${{ needs.full-build.result }}"
+          echo ""
+          if [ "${{ needs.contract-gate.result }}" != "success" ]; then
+            echo "🔴 MERGE BLOCKED — Contract gate must pass."
+            exit 1
+          elif [ "${{ needs.full-build.result }}" != "success" ]; then
+            echo "🟡 MERGE ALLOWED (contract gate passed) but full build has issues."
+            echo "   Check individual job logs for details."
+          else
+            echo "🟢 ALL CHECKS PASSED — Ready to merge."
+          fi

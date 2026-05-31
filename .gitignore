@@ -1,0 +1,54 @@
+# ============================================================
+# XYPlot SDK — .gitignore
+# Owner: Agent B (基础设施)
+# ============================================================
+
+# Build directories
+build/
+out/
+cmake-build-*/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Compiled artifacts
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+*.exe
+*.ilk
+*.pdb
+*.exp
+
+# Ninja
+.ninja_deps
+.ninja_log
+*.ninja
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+
+# Testing
+Testing/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary
+*.tmp
+*.log
+.claude/
+.claude/
