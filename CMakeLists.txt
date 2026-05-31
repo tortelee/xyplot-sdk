@@ -17,7 +17,7 @@
 # ============================================================
 
 cmake_minimum_required(VERSION 3.20)
-project(xyplot VERSION 0.1.0 LANGUAGES CXX)
+project(xyplot VERSION 1.0.0 LANGUAGES CXX)
 
 # ──── C++ Standard ────
 set(CMAKE_CXX_STANDARD 17)
