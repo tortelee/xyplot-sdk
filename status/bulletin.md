@@ -1,108 +1,47 @@
 # 📋 Project Lead 公告板
 
-**最后更新**: 2026-05-31 17:30
+**最后更新**: 2026-05-31 — Phase C 质量深化启动
 **所有人**: Project Lead
-**所有人必须读**: 每次合并窗口前（12:00 / 17:00）先读本文件
+**所有人必须读**: 每次启动时 + 合并窗口前
 
 ---
 
-## 当前全局状态：🟡 集成收敛中
+## 当前全局状态：🟢 Day 1 完成 → 质量深化中
 
 ```
-编译: ✅ 25 targets, 0 warnings, 0 errors
-测试: ✅ 5/5 套件, 100% 通过
-P0:   ✅ 100% 完成
-问题: 🟡 3 个模块间重复实现需去重
+Day 1 交付: ✅ 61 files, 12,893 lines, 0 warnings, 100% tests
+下一步:    🟡 Phase C 质量深化 (Day 2 上午)
 ```
 
 ---
 
-## ⚠️ 活跃指令（按优先级）
+## ⚠️ 活跃指令（Phase C — 质量深化）
 
-### P0 — 必须完成，否则不合并
+**全部指令详见 `docs/07-agent-coordination.md` §12。**
 
-| # | 负责 | 指令 | 详情文件 |
-|---|------|------|---------|
-| 1 | **Agent E** | plot.cpp 切换为调用 Agent C 的模块（移除内联 tick/transform/layout） | `agent-e-status.md` |
-| 2 | **Agent D** | xyplot_internal.h 移除重复的 transform 桩 + Nice Number → 改用 Agent C | `agent-d-status.md` |
+| 优先级 | 负责 | 任务 | 预计耗时 |
+|--------|------|------|---------|
+| P0 | **Agent C** | 补充 DataTable 独立测试 (≥15 项) | 1h |
+| P1 | **Agent E** | 性能基线测试 (1M点变换 + 渲染 + 内存) | 30min |
+| P1 | **Agent B** | AddressSanitizer 内存安全检查 | 30min |
+| P2 | **Agent F** | 文档同步检查 (API_REFERENCE + README) | 30min |
+| P2 | **Agent A** | 接口合规终审 | 15min |
 
-### P1 — 应该完成
-
-| # | 负责 | 指令 | 详情文件 |
-|---|------|------|---------|
-| 3 | **Agent C** | 审查 Agent B 的临时修复（axis_system.cpp:141） | `agent-c-status.md` |
-| 4 | **Agent D** | 暴露内部类型声明（createPlotType 等）到 xyplot_internal.h | `agent-d-status.md` |
-| 5 | **Agent E** | 审查 Agent B 的临时修复（plot.cpp 2 处） | `agent-e-status.md` |
-| 6 | **Agent A** | 更新 interface-freeze.md 版本号 | `agent-a-status.md` |
-| 7 | **Agent F** | 切换完成后验证 minimal 示例 | `agent-f-status.md` |
-
-### P2 — 择机完成
-
-| # | 负责 | 指令 | 详情文件 |
-|---|------|------|---------|
-| 8 | **Agent B** | 最终 gate-check --full 验证 | `agent-b-status.md` |
-
----
-
-## 📊 各 Agent 评分卡
-
-| Agent | 评分 | 状态 | 核心问题 |
-|-------|------|------|---------|
-| A — 接口守护 | ⭐5.0 | 🟢 | — |
-| B — 基础设施 | ⭐4.8 | 🟢 | 跨 Owner 临时修复（已记录） |
-| C — 核心算法 | ⭐5.0 | 🟢 | — |
-| D — 图类型 | ⭐4.6 | 🟡 | 🔴 重复实现需去重 |
-| E — 后端集成 | ⭐4.8 | 🟡 | 🔴 内联代码需切换 |
-| F — 文档示例 | ⭐5.0 | 🟢 | — |
-
-> 评分详情见 `daily-report-2026-05-31.md`
-
----
-
-## 📌 重复实现问题（17:00 合并窗口重点）
-
+**执行节奏**:
 ```
-问题：3 个 Agent 各自实现了同一功能
-
-坐标变换:
-  Agent C: src/coordinate_transform.cpp  ← 正式模块
-  Agent D: src/xyplot_internal.h transform::  ← 需移除
-  Agent E: src/plot.cpp 内联              ← 需切换
-
-刻度算法:
-  Agent C: src/axis_system.cpp           ← 正式模块
-  Agent D: src/multi_axis.cpp 内联        ← 需移除
-  Agent E: src/plot.cpp 内联              ← 需切换
-
-目标状态:
-  Agent C: 唯一实现者
-  Agent D+E: 调用者 (#include Agent C 的头文件)
+09:00  读 docs/07-agent-coordination.md §12 → 获取详细任务
+09:15  5 Agent 并行启动
+11:00  合并窗口
+12:00  质量深化完成
 ```
 
 ---
 
-## 🔄 17:00 合并窗口流程
+## 📖 快速导航
 
-```
-16:45  各 Agent 重新读取本公告板 + 自己的 status 文件
-       ↓
-16:50  Agent D 和 Agent E 完成切换，本地 gate-check 通过
-       ↓
-17:00  Agent B 运行 gate-check --full
-       ↓
-       如果全部通过 → 合并 → 发布 Day 1 最终版本
-       如果有失败 → 对应 Agent 修复 → 18:00 追加合并
-```
-
----
-
-## 📖 文件索引（Agent 速查）
-
-| 我想了解... | 看哪个文件 |
-|------------|-----------|
-| 我的具体任务和指令 | `status/agent-X-status.md`（X = 你的字母） |
-| 全局状态和其他 Agent 进度 | `status/bulletin.md`（本文件） |
-| 今日完整评估报告 | `status/daily-report-2026-05-31.md` |
-| 项目总体设计 | `docs/07-agent-coordination.md` |
-| 接口冻结清单 | `docs/interface-freeze.md` |
-| 量化日报（给 PO） | `status/daily-report-2026-05-31.md` §量化指标 |
+| 我要... | 文件 |
+|---------|------|
+| 看今天的任务 | `docs/07-agent-coordination.md` §12 |
+| 汇报进度 | `status/agent-X-status.md` |
+| 看全局状态 | `status/bulletin.md`（本文件） |
+| 看接口冻结 | `docs/interface-freeze.md` |

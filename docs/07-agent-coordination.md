@@ -505,3 +505,159 @@ grep "Gate Check" status/agent-*-status.md
 ---
 
 > **核心思想**：6 个 Agent 不是 6 个人在开会——是 6 个进程在各自的文件域内独立工作。文件所有权矩阵消除了 90% 的协调开销。合并窗口 + gate-check 处理剩余 10%。**上行通过 status/*.md，下行通过 docs/07，双向闭环。**
+
+---
+
+## 十二、Phase C：质量深化（Day 2 上午）
+
+**发布时间**: 2026-05-31 Day 1 收尾
+**执行时间**: Day 2 09:00 - 12:00
+**目标**: 补齐测试缺口、建立性能基线、内存安全验证
+
+### 12.1 质量基线扫描结果
+
+| 维度 | 结果 |
+|------|------|
+| 编译警告 | ✅ 25 targets, 0 warnings |
+| 测试通过率 | ✅ 5/5 套件, 100% |
+| 头文件守卫 | ✅ 14/14 `#pragma once` |
+| TODO/FIXME | ✅ 零个 |
+| NaN/Inf 处理 | ✅ coordinate_transform 完整处理 |
+| 除零保护 | ✅ 使用 `DBL_EPSILON` 检查 |
+| 数组越界 | ✅ 所有访问有边界检查 |
+| 公开/内部 API 分离 | ✅ include/ vs src/ |
+| 调试打印 | ✅ 源码中无 printf/cout |
+| **DataTable 独立测试** | ❌ 缺失 |
+| **性能基线** | ❌ 无数据 |
+| **内存安全检查** | ❌ 未运行 ASan/Valgrind |
+
+### 12.2 任务分配
+
+---
+
+**Agent C — 补充 DataTable 测试** (P0, 预计 1 小时)
+
+```
+新增文件: tests/test_datatable.cpp
+
+测试用例（≥15 项）:
+  1. fromMemory — 正常 3×2 矩阵
+  2. fromMemory — 空数据 (0 rows)
+  3. fromMemory — 单行单列
+  4. column() — 正常索引
+  5. column() — 越界索引返回 nullptr
+  6. columnName() — 正常索引
+  7. columnName() — 越界索引返回空字符串
+  8. rowCount() / colCount() — 与输入一致
+  9. fromCSV — 正常文件（创建临时 CSV）
+  10. fromCSV — 空文件
+  11. fromCSV — 只有表头无数据行
+  12. fromCSV — 包含空行的文件
+  13. fromCSV — 不同分隔符（逗号/空格/Tab）
+  14. column() — 返回指针的稳定性（两次调用同一索引）
+  15. fromMemory — 大数据 (100万行) 性能和内存
+
+验收: cmake --build build && ctest -R test_datatable --output-on-failure
+```
+
+---
+
+**Agent E — 性能基线测试** (P1, 预计 30 分钟)
+
+```
+新增文件: tests/test_performance.cpp
+
+测试用例:
+  1. 1M 点坐标变换耗时（期望 < 50ms Debug, < 10ms Release）
+  2. 1M 点折线渲染路径（transform + drawPolyline 调用序列, 不含实际渲染）
+  3. 10M 点内存占用（DataTable 存储开销）
+  4. Axis computeTicks 耗时（极端范围: 1e-15 到 1e15）
+
+验收: cmake --build build && ./build/test_performance
+```
+
+---
+
+**Agent B — 内存安全检查** (P1, 预计 30 分钟)
+
+```
+运行以下检查并记录结果:
+
+  1. AddressSanitizer 构建:
+     cmake -B build/asan -DCMAKE_BUILD_TYPE=Debug \
+           -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer"
+     cmake --build build/asan
+     cd build/asan && ctest --output-on-failure
+
+  2. 确认零内存错误 (0 leaks, 0 buffer overflows)
+
+  3. 如果机器不支持 ASan (Windows/MSVC), 使用:
+     - MSVC: /fsanitize=address
+     - 或跳过，记录"ASan 在 Windows 上待 Linux CI 验证"
+
+验收: 输出 sanitizer 报告，零错误
+```
+
+---
+
+**Agent F — 文档同步检查** (P2, 预计 30 分钟)
+
+```
+检查项:
+  1. API_REFERENCE.md 是否覆盖了 Include/ 下所有公开类型？
+     - IRenderDevice (8 方法 + 1 可降级)
+     - IInputSource / InputEvent
+     - Plot (所有公开方法)
+     - Color, LineStyle, MarkerStyle, FillStyle, FontDesc, TextStyle
+     - DataPoint, Rect, ScaleType
+
+  2. Agent C 的 src/*.h 是否需要在 API_REFERENCE 中记录？
+     - coordinate_transform.h (transformPoints 等)
+     - axis_system.h (computeTicks 等)
+     - layout_engine.h (computeLayout)
+     - datatable.h (DataTable)
+     → 如果客户需要直接调用这些函数，更新文档
+     → 如果仅内部使用，在 API_REFERENCE 中标注"内部模块"
+
+  3. README.md 中的构建命令是否能一步跑通？
+     → 实际执行验证
+
+验收: 列出需要更新的条目，自行修复
+```
+
+---
+
+**Agent A — 接口合规终审** (P2, 预计 15 分钟)
+
+```
+检查项:
+  1. contract test 是否仍然 100% 反映冻结接口
+  2. 所有 P0 必需方法是否都有 static_assert 类型检查
+  3. interface-freeze.md 中 types.h 的版本号是否最新
+  4. 确认 Day 1 全天零破坏性变更
+
+验收: gate-check.sh 通过 + interface-freeze.md 版本号更新
+```
+
+---
+
+### 12.3 执行节奏
+
+```
+09:00 — 所有 Agent 读本文档 §12，获取自己的任务
+09:15 — Agent C/E/B/F/A 并行启动
+11:00 — 合并窗口 #1：提交质量深化成果
+11:30 — Project Lead 最终验证
+12:00 — 质量深化阶段完成，输出 Day 2 上午日报
+```
+
+### 12.4 验收标准
+
+| 指标 | 当前 | 目标 |
+|------|------|------|
+| 测试套件数 | 5 | **6** (+test_datatable) |
+| 测试断言数 | ~120 | **~150** (+30) |
+| 性能基线 | 无 | **有** (4 项指标) |
+| 内存安全 | 未验证 | **ASan 零错误** |
+| 文档同步 | 未知 | **已验证** |
+| 接口合规 | ✅ | **终审确认** |

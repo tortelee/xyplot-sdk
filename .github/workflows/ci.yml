@@ -127,12 +127,51 @@ jobs:
           retention-days: 7
 
   # ============================================================
-  # Job 3: Test Summary
+  # Job 3: Memory Safety (ASan on Linux)
+  # ============================================================
+  memory-safety:
+    name: "🧹 Memory Safety (ASan)"
+    runs-on: ubuntu-latest
+    # Only on push to main, not every PR (ASan builds are slow)
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure with ASan
+        run: |
+          cmake -B build/asan -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"
+
+      - name: Build All Targets with ASan
+        run: cmake --build build/asan -j$(nproc)
+
+      - name: Run All Tests under ASan
+        run: |
+          cd build/asan
+          ctest --output-on-failure
+
+      - name: ✅ Memory Safety Passed
+        if: success()
+        run: echo "✅ ASan — zero memory errors (0 leaks, 0 buffer overflows)."
+
+      - name: ❌ Memory Error Detected
+        if: failure()
+        run: |
+          echo "❌ ASAN DETECTED MEMORY ERRORS"
+          echo "Check the test output above for details."
+          echo "ACTION: Fix the memory error before merging."
+          exit 1
+
+  # ============================================================
+  # Job 4: Test Summary
   # ============================================================
   test-summary:
     name: "📊 Test Summary"
     runs-on: ubuntu-latest
-    needs: [contract-gate, full-build]
+    needs: [contract-gate, full-build, memory-safety]
     if: always()
 
     steps:
@@ -144,6 +183,7 @@ jobs:
           echo ""
           echo "Contract Gate: ${{ needs.contract-gate.result }}"
           echo "Full Build:    ${{ needs.full-build.result }}"
+          echo "Memory Safety: ${{ needs.memory-safety.result }}"
           echo ""
           if [ "${{ needs.contract-gate.result }}" != "success" ]; then
             echo "🔴 MERGE BLOCKED — Contract gate must pass."

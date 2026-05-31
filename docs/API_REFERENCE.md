@@ -469,6 +469,14 @@ private:
 
 ### 5.2 轴配置
 
+#### xAxisSetLabel(label) / yAxisSetLabel(label)
+
+设置 X 或 Y（左）轴的标签文本。
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `label` | `const char*` | 轴标签文本。`nullptr` 或 `""` 清除标签 |
+
 #### setAxisRange(xMin, xMax, yMin, yMax, yAxisIndex)
 
 手动设置轴范围。
@@ -614,6 +622,37 @@ public:
 
 ### 7.2 Axis System (axis_system.h)
 
+**输入结构体 `AxisConfig`**：
+
+```cpp
+struct AxisConfig {
+    double    dataMin          = 0.0;   // 数据范围下限
+    double    dataMax          = 1.0;   // 数据范围上限
+    ScaleType scaleType        = ScaleType::Linear;  // 刻度类型
+    int       targetMajorTicks = 5;     // 目标主刻度数
+    int       targetMinorTicks = 1;     // 主刻度间的次刻度数（0=无次刻度）
+};
+```
+
+**输出结构体 `AxisTicks`**：
+
+```cpp
+struct AxisTicks {
+    std::vector<double>      majorTicks;   // 主刻度值（数据空间）
+    std::vector<double>      minorTicks;   // 次刻度值（可为空）
+    std::vector<std::string> labels;       // 格式化标签，与 majorTicks 1:1 对应
+    double                   niceMin = 0;  // nice 范围下限
+    double                   niceMax = 1;  // nice 范围上限
+};
+
+struct TickInfo {
+    double value = 0.0;       // 刻度值
+    bool   isMajor = true;    // true=主刻度, false=次刻度
+};
+```
+
+**函数 API**：
+
 ```cpp
 double niceNumber(double x, bool round);
 int autoPrecision(double tickInterval);
@@ -652,6 +691,13 @@ void transformPoints(const double* dataX, const double* dataY, int count,
                      double* outX, double* outY,
                      ScaleType xScale = ScaleType::Linear,
                      ScaleType yScale = ScaleType::Linear);
+
+/// 单数组变换（仅 X 或仅 Y）
+void transformArray(const double* data, int count,
+                    double dataMin, double dataMax,
+                    double deviceMin, double deviceMax,
+                    double* out,
+                    ScaleType scaleType = ScaleType::Linear);
 ```
 
 **变换管道**：`DataSpace → NormalizedSpace [0,1] → DeviceSpace (pixels)`
@@ -660,15 +706,71 @@ void transformPoints(const double* dataX, const double* dataY, int count,
 
 ### 7.4 Layout Engine (layout_engine.h)
 
-```cpp
-LayoutResult computeLayout(const LayoutConfig& config, IRenderDevice& device);
-LayoutResult computeLayoutMinimal(const LayoutConfig& config);  // 无需 device
+**输入结构体 `LayoutConfig`**：
 
-struct LayoutResult {
-    Rect titleRect, plotRect, xAxisRect, yAxisRect, yAxisRightRect;
-    Rect legendRect, xLabelRect, yLabelRect, yLabelRightRect;
-    bool isValid() const;
+```cpp
+struct LayoutConfig {
+    double totalWidth  = 800.0;    // 可用设备宽度
+    double totalHeight = 600.0;    // 可用设备高度
+
+    // 内容存在性标记
+    bool hasTitle           = false;
+    bool hasXAxisLabel      = false;
+    bool hasYAxisLabel      = false;
+    bool hasYAxisRightLabel = false;
+    bool hasLegend          = false;
+
+    // 覆盖尺寸（0 = 根据字体自动计算）
+    double titleHeight      = 0.0;
+    double xLabelHeight     = 0.0;
+    double yLabelWidth      = 0.0;
+    double legendWidth      = 0.0;
+    double legendHeight     = 0.0;
+
+    // 字体描述
+    FontDesc titleFont     {14.0, true,  false};
+    FontDesc axisLabelFont {12.0, false, false};
+    FontDesc tickLabelFont {10.0, false, false};
+    FontDesc legendFont    {11.0, false, false};
+
+    // 文本内容（用于 textExtent 测量）
+    std::string title;
+    std::string xLabel;
+    std::string yLabel;
+    std::string yRightLabel;
+
+    double maxTickLabelWidth  = 0.0;   // 最长刻度标签宽度（0=自动估算）
+    double maxTickLabelHeight = 0.0;   // 最长刻度标签高度（0=自动估算）
+    int    legendItemCount    = 0;     // 图例条目数
 };
+```
+
+**输出结构体 `LayoutResult`**：
+
+```cpp
+struct LayoutResult {
+    Rect titleRect;          // 标题区
+    Rect plotRect;           // 主绘图区
+    Rect xAxisRect;          // X 轴线 + 刻度（绘图区下方）
+    Rect yAxisRect;          // Y 轴线 + 刻度（绘图区左侧）
+    Rect yAxisRightRect;     // 右Y轴线 + 刻度（绘图区右侧）
+    Rect legendRect;         // 图例区
+    Rect xLabelRect;         // X 轴标签（X 轴下方）
+    Rect yLabelRect;         // Y 轴标签（Y 轴左侧）
+    Rect yLabelRightRect;    // 右Y轴标签（右Y轴右侧）
+
+    bool isValid() const;    // plotRect.w > 0 && plotRect.h > 0
+};
+```
+
+**函数 API**：
+
+```cpp
+// 精确布局（使用 device.textExtent() 测量文本）
+LayoutResult computeLayout(const LayoutConfig& config, IRenderDevice& device);
+
+// 最小布局（使用保守字体估算，无需 device）
+LayoutResult computeLayoutMinimal(const LayoutConfig& config);
 ```
 
 **布局策略**：渐进减法 — 从总画布减去标题区、轴标签区、图例区，剩余空间 = 绘图区。

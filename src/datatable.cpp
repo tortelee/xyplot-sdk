@@ -113,7 +113,19 @@ DataTable DataTable::fromCSV(const char* filename, bool hasHeader) {
         }
     }
 
-    if (numCols == 0 || rawRows.empty()) return table;
+    if (numCols == 0) return table;
+
+    // Handle header-only CSV (has columns but no data rows)
+    if (rawRows.empty()) {
+        table.m_names.resize(numCols);
+        table.m_columns.resize(numCols);  // each column empty (0 rows)
+        for (int c = 0; c < numCols; ++c) {
+            table.m_names[c] = (c < static_cast<int>(headerNames.size()))
+                                   ? headerNames[c]
+                                   : "col" + std::to_string(c);
+        }
+        return table;
+    }
 
     // Second pass: convert to double columns
     int numRows = static_cast<int>(rawRows.size());

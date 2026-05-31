@@ -13,6 +13,7 @@
 #include <string>
 #include <cmath>
 #include <memory>
+#include <stdexcept>
 
 using namespace xyplot;
 using namespace xyplot::internal;
@@ -624,6 +625,207 @@ void test_transform_log_scale() {
 }
 
 // ============================================================
+// Section 2a: LinePlot 边界条件
+// ============================================================
+void test_line_plot_single_point() {
+    auto plot = createPlotType("Line");
+    SpyDevice device;
+
+    double xs[] = {5.0};
+    double ys[] = {3.0};
+
+    SeriesRenderData data;
+    data.xs = xs; data.ys = ys; data.count = 1;
+    data.lineStyle.width = 1.0;
+    data.lineStyle.color = {100, 100, 100};
+
+    AxisRenderConfig axis;
+    axis.xMin = 0.0; axis.xMax = 10.0;
+    axis.yMin = 0.0; axis.yMax = 10.0;
+
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, data, axis, area);
+
+    // 单点应产生 polyline（即使只有1个点）
+    assert(device.drawPolylineCalls >= 1);
+    assert(device.lastPolyline.count == 1);
+}
+
+void test_line_plot_log10_scale() {
+    auto plot = createPlotType("Line");
+    SpyDevice device;
+
+    // Log10 range: 1 to 1000
+    double xs[] = {1.0, 10.0, 100.0, 1000.0};
+    double ys[] = {1.0, 10.0, 100.0, 1000.0};
+
+    SeriesRenderData data;
+    data.xs = xs; data.ys = ys; data.count = 4;
+    data.lineStyle.width = 1.0;
+    data.lineStyle.color = {0, 0, 0};
+
+    AxisRenderConfig axis;
+    axis.xMin = 1.0; axis.xMax = 1000.0;
+    axis.yMin = 1.0; axis.yMax = 1000.0;
+    axis.xScale = ScaleType::Log10;
+    axis.yScale = ScaleType::Log10;
+
+    DevicePlotArea area;
+    area.left = 100; area.top = 0;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, data, axis, area);
+
+    // Log scale 渲染应成功产生 polyline
+    assert(device.drawPolylineCalls >= 1);
+    assert(device.lastPolyline.count == 4);
+}
+
+void test_scatter_plot_empty_data() {
+    auto plot = createPlotType("Scatter");
+    SpyDevice device;
+
+    SeriesRenderData data;
+    data.xs = nullptr;
+    data.ys = nullptr;
+    data.count = 0;
+    data.lineStyle.color = {255, 0, 0};
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, data, axis, area);
+
+    // 空数据不应调用任何绘制
+    assert(device.drawMarkersCalls == 0);
+    assert(device.drawPolylineCalls == 0);
+}
+
+void test_scatter_plot_single_point() {
+    auto plot = createPlotType("Scatter");
+    SpyDevice device;
+
+    double xs[] = {5.0};
+    double ys[] = {7.0};
+
+    SeriesRenderData data;
+    data.xs = xs; data.ys = ys; data.count = 1;
+    data.lineStyle.color = {0, 128, 0};
+    data.markerStyle.size = 8.0;
+    data.markerStyle.shape = MarkerStyle::Diamond;
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 500; area.height = 400;
+
+    plot->render(device, data, axis, area);
+
+    // 单点散点应产生 1 个 marker
+    assert(device.drawMarkersCalls >= 1);
+    assert(device.lastMarkers.count == 1);
+}
+
+// ============================================================
+// Section 4a: MultiAxis 边界条件
+// ============================================================
+void test_multi_axis_multiple_right() {
+    MultiAxisManager axes;
+
+    axes.addRightAxis("Right 1");
+    axes.addRightAxis("Right 2");
+
+    assert(axes.count() == 3);
+    assert(axes.leftAxisCount() == 1);
+    assert(axes.rightAxisCount() == 2);
+
+    // 验证右侧轴按索引正确存储
+    assert(axes.axis(1).isRight);
+    assert(axes.axis(2).isRight);
+    assert(axes.axis(1).label == "Right 1");
+    assert(axes.axis(2).label == "Right 2");
+}
+
+void test_multi_axis_out_of_bounds() {
+    MultiAxisManager axes;
+
+    // 越界访问 .at() 应抛出异常
+    bool caught = false;
+    try {
+        (void)axes.axis(99);
+    } catch (const std::out_of_range&) {
+        caught = true;
+    }
+    assert(caught);
+}
+
+void test_multi_axis_render_ticks_integration() {
+    // 验证 renderTicksAndGrid 使用 Agent C 的 computeTicks() 正常工作
+    MultiAxisManager axes;
+    axes.setRange(0, 0.0, 100.0);
+
+    SpyDevice device;
+    DevicePlotArea area;
+    area.left = 80; area.top = 20;
+    area.width = 600; area.height = 400;
+
+    axes.renderTicksAndGrid(0, device, area, false);
+
+    // 应产生网格线（水平线）和轴线
+    assert(device.drawPolylineCalls >= 2);  // 至少 1 条网格线 + 1 条轴线
+}
+
+// ============================================================
+// Section 5a: LegendRenderer 边界条件
+// ============================================================
+void test_legend_single_entry() {
+    LegendRenderer renderer;
+
+    std::vector<LegendEntry> entries;
+    entries.push_back({"Only", {128, 0, 128}, LineStyle{}});
+
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    SpyDevice device;
+    renderer.render(device, entries, area, 12.0);
+
+    // 单条目：1 个背景 + 1 个色块 = 2 个 fillRect
+    assert(device.fillRectCalls >= 2);
+    assert(device.drawTextCalls >= 1);
+}
+
+void test_legend_many_entries() {
+    LegendRenderer renderer;
+
+    std::vector<LegendEntry> entries;
+    for (int i = 0; i < 10; i++) {
+        LegendEntry e;
+        e.name = "Series " + std::to_string(i);
+        e.swatchColor = {static_cast<uint8_t>(i * 25), 0, 0};
+        entries.push_back(e);
+    }
+
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 700; area.height = 500;
+
+    auto items = renderer.layout(entries, area, 11.0);
+
+    assert(items.size() == 10);
+    // 所有条目应在绘图区内
+    Rect bb = renderer.boundingBox();
+    assert(bb.y >= area.top);
+    assert(bb.y + bb.h <= area.top + area.height);
+}
+
+// ============================================================
 // Section 7: Integration — 完整渲染流程
 // ============================================================
 void test_integration_line_and_scatter() {
@@ -707,11 +909,15 @@ int main() {
     test_line_plot_empty_data();
     test_line_plot_with_markers();
     test_line_plot_coordinate_transform();
+    test_line_plot_single_point();
+    test_line_plot_log10_scale();
 
     // ScatterPlot
     test_scatter_plot_renders_markers();
     test_scatter_plot_default_marker_style();
     test_scatter_plot_with_line();
+    test_scatter_plot_empty_data();
+    test_scatter_plot_single_point();
 
     // MultiAxis
     test_multi_axis_default();
@@ -719,11 +925,16 @@ int main() {
     test_multi_axis_config();
     test_multi_axis_auto_range();
     test_multi_axis_render_labels();
+    test_multi_axis_multiple_right();
+    test_multi_axis_out_of_bounds();
+    test_multi_axis_render_ticks_integration();
 
     // LegendRenderer
     test_legend_renderer_layout();
     test_legend_renderer_render();
     test_legend_empty_entries();
+    test_legend_single_entry();
+    test_legend_many_entries();
 
     // Coordinate Transform
     test_transform_linear();
