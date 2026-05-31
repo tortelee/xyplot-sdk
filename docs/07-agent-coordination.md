@@ -661,3 +661,148 @@ grep "Gate Check" status/agent-*-status.md
 | 内存安全 | 未验证 | **ASan 零错误** |
 | 文档同步 | 未知 | **已验证** |
 | 接口合规 | ✅ | **终审确认** |
+
+---
+
+## 十三、Phase B：P1 图类型扩展
+
+**发布时间**: Phase C 完成后
+**执行时间**: 预计 1-2 天
+**目标**: 新增 8 种图类型（P1），扩展 IRenderDevice +2 方法
+
+### 13.1 架构影响分析
+
+```
+10 种 P1 图类型 → 按架构影响分 3 批:
+
+B1 (零接口变更):  Bar, Step, ErrorBar, Histogram, Polar
+  └─ 仅需新增 IPlotType 子类，复用现有 8+1 IRenderDevice
+
+B2 (扩展接口):    Area, Heatmap, Contour
+  └─ Area → 需要 fillPolygon（填充任意多边形）
+  └─ Heatmap → 需要 drawImage（像素块渲染）
+  └─ Contour → 需要算法 + drawPolyline（轮廓线可用现有接口）
+
+B3 (3D):          3D Surface, 3D Scatter  → 架构复杂，另案处理
+```
+
+### 13.2 B1：零接口变更（5 种图类型）
+
+**Agent A — 零工作**。B1 不需要 IRenderDevice 变更。
+
+**Agent C — Polar 坐标变换** 
+
+```
+新增文件: src/polar_transform.h + src/polar_transform.cpp
+
+接口:
+  namespace xyplot {
+    // 极坐标 → 笛卡尔坐标
+    void polarToCartesian(double r, double theta, double& x, double& y);
+    // 批量变换
+    void polarToCartesianBatch(const double* r, const double* theta,
+                               int count, double* outX, double* outY);
+  }
+
+验收: 单元测试 10+ 项 (0°/90°/180°/270°/负角/大半径/零半径)
+```
+
+**Agent D — 5 种新 IPlotType** 
+
+```
+每个图类型 1 个 .cpp 文件:
+
+  src/bar_plot.cpp      (~80 行)  fillRect 绘制柱子
+  src/step_plot.cpp     (~50 行)  drawPolyline 阶梯路径
+  src/error_bar.cpp     (~60 行)  drawPolyline 误差线
+  src/histogram.cpp     (~70 行)  fillRect + DataTable 分箱
+  src/polar_plot.cpp    (~80 行)  drawPolyline + polar 坐标变换
+
+每个类型:
+  - 实现 IPlotType 接口 (typeName + render)
+  - 注册到 PlotRegistry (Agent D 负责)
+
+验收: 每个类型 ≥5 个单元测试 (test_plots.cpp 扩展)
+```
+
+**Agent E — 集成**
+
+```
+- PlotRegistry 注册 5 个新类型
+- Plot::addBarSeries() / addStepSeries() 等便捷 API (可选)
+- 集成测试扩展
+
+验收: test_integration.cpp 新增 ≥5 个测试
+```
+
+### 13.3 B2：扩展 IRenderDevice（+2 方法，3 种图类型）
+
+B2 在 B1 完成后启动。首先扩展 IRenderDevice：
+
+**Agent A — 接口扩展审核**
+
+```cpp
+// 新增到 irender_device.h（冻结策略: virtual + 默认空实现）
+
+class IRenderDevice {
+public:
+    // ... P0 8+1 不变 ...
+
+    // ──── P1 扩展 (B2) ────
+    
+    // 填充任意多边形（Area Plot 使用）
+    virtual void fillPolygon(const double* xs, const double* ys,
+                             int count, const FillStyle& style) {}
+
+    // 渲染像素图像（Heatmap 使用）
+    // rgba: RGBA 格式像素，imgW×imgH
+    virtual void drawImage(double x, double y, double w, double h,
+                           const uint8_t* rgba, int imgW, int imgH) {}
+};
+```
+
+**Agent D — 3 种新 IPlotType**
+
+```
+  src/area_plot.cpp     (~80 行)  fillPolygon 填充 + drawPolyline 边界
+  src/heatmap.cpp       (~100 行) drawImage 渲染 + 色条
+  src/contour.cpp       (~150 行) 等值线算法 + drawPolyline
+```
+
+**Agent C — Contour 算法**
+
+```
+新增文件: src/contour_algorithm.h + src/contour_algorithm.cpp
+
+功能: Marching Squares 算法，输入 grid + 等值线值 → 输出轮廓路径
+
+验收: 单元测试 ≥8 项
+```
+
+### 13.4 执行节奏
+
+```
+B1 (预计 1 天):
+  09:00  Agent C 启动 polar_transform
+         Agent D 启动 5 种 IPlotType
+  12:00  合并窗口 — B1 类型提交
+  14:00  Agent E 集成 B1 类型 → 集成测试
+  17:00  B1 完成
+
+B2 (预计 1 天):
+  09:00  Agent A 审核 + 新增 fillPolygon/drawImage 到 IRenderDevice
+         Agent C 启动 contour_algorithm
+         Agent D 启动 Area/Heatmap/Contour
+  12:00  合并窗口 — B2 类型提交
+  17:00  B2 完成，Phase B 收尾
+```
+
+### 13.5 验收标准
+
+| 指标 | Phase C 基线 | B1 目标 | B2 目标 |
+|------|-------------|---------|---------|
+| 图类型 | 2 (Line+Scatter) | **7** (+5) | **10** (+3) |
+| IRenderDevice 方法 | 8+1 | 8+1 (不变) | **8+3** (+fillPolygon+drawImage) |
+| 测试套件 | 7 | ≥**8** | ≥**10** |
+| 总断言数 | ~190 | ≥**230** | ≥**280** |
+| 破坏性变更 | 0 | 0 | 0 |

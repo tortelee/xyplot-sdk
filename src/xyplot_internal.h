@@ -30,6 +30,12 @@ struct SeriesRenderData {
     MarkerStyle markerStyle{};
     int yAxisIndex = 0;
     const char* name = "";
+
+    // ── B1 扩展字段（可选，默认值保持向后兼容）──
+    const double* errorLow = nullptr;   // ErrorBar: 下误差值（与 ys 等长）
+    const double* errorHigh = nullptr;  // ErrorBar: 上误差值（与 ys 等长）
+    double barWidth = 0.0;              // Bar/Histogram: 柱宽（0 = 自动计算）
+    bool stepPreHorizontal = true;      // Step: true=先水平后垂直, false=先垂直后水平
 };
 
 /// 轴配置（用于坐标变换）
@@ -200,6 +206,13 @@ std::vector<std::string> listPlotTypes();
 // ============================================================
 std::unique_ptr<IPlotType> createLinePlot();
 std::unique_ptr<IPlotType> createScatterPlot();
+
+// ── B1 图类型工厂 ──
+std::unique_ptr<IPlotType> createBarPlot();
+std::unique_ptr<IPlotType> createStepPlot();
+std::unique_ptr<IPlotType> createErrorBarPlot();
+std::unique_ptr<IPlotType> createHistogramPlot();
+std::unique_ptr<IPlotType> createPolarPlot();
 
 } // namespace internal
 } // namespace xyplot

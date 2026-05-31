@@ -1,80 +1,82 @@
 # Agent D 状态 — 图类型
 
-**最后更新**: 2026-05-31 — Phase C 质量深化完成
-**当前阶段**: Phase C — 质量深化
+**最后更新**: 2026-05-31 — Phase B B1 完成
+**当前阶段**: Phase B — P1 图类型扩展
 **状态**: 🟢 正常
 
 ---
 
-## Phase C 质量深化（Day 2 上午）
+## Phase B B1 — 5 种新图类型完成
 
-### 质量基线扫描结果（Agent D 域）
+### 交付清单
 
-| 维度 | 结果 |
-|------|------|
-| 编译警告 | ✅ 0 warnings |
-| 测试通过率 | ✅ 5/5 套件, 100% (含 30 项 test_plots) |
-| 头文件守卫 | ✅ `xyplot_internal.h` — `#pragma once` |
-| TODO/FIXME | ✅ 零个 |
-| NaN/Inf 处理 | ✅ 委托 Agent C（coordinate_transform 完整处理） |
-| 除零保护 | ✅ 委托 Agent C（DBL_EPSILON 检查） |
-| 数组越界 | ✅ MultiAxisManager 使用 `.at()` 边界检查 |
-| 公开/内部 API 分离 | ✅ `include/xyplot/` vs `src/xyplot_internal.h` |
-| 调试打印 | ✅ 源码中无 printf/cout |
-| 模块间去重 | ✅ transform → Agent C, Nice Number → Agent C |
-
-### Phase C 新增测试（9 项边缘用例）
-
-| 测试 | 覆盖场景 |
-|------|---------|
-| `test_line_plot_single_point` | 单数据点折线 |
-| `test_line_plot_log10_scale` | Log10 刻度折线 |
-| `test_scatter_plot_empty_data` | 空数据散点 |
-| `test_scatter_plot_single_point` | 单数据点散点 |
-| `test_multi_axis_multiple_right` | 多个右侧 Y 轴 |
-| `test_multi_axis_out_of_bounds` | 越界访问异常 |
-| `test_multi_axis_render_ticks_integration` | computeTicks 集成验证 |
-| `test_legend_single_entry` | 单条目图例 |
-| `test_legend_many_entries` | 10 条目图例布局 |
+| 文件 | 类型 | 行数 | 渲染方式 |
+|------|------|------|---------|
+| [src/bar_plot.cpp](src/bar_plot.cpp) | Bar | ~55 | fillRect 绘制柱子 |
+| [src/step_plot.cpp](src/step_plot.cpp) | Step | ~60 | drawPolyline 阶梯路径 |
+| [src/error_bar.cpp](src/error_bar.cpp) | ErrorBar | ~65 | drawPolyline 误差线+端帽 |
+| [src/histogram.cpp](src/histogram.cpp) | Histogram | ~85 | fillRect + Sturges 自动分箱 |
+| [src/polar_plot.cpp](src/polar_plot.cpp) | Polar | ~95 | drawPolyline + 极坐标→笛卡尔 |
+| [src/xyplot_internal.h](src/xyplot_internal.h) | 扩展 | +7 | SeriesRenderData 新增 B1 字段 |
+| [src/plot_registry.cpp](src/plot_registry.cpp) | 扩展 | +5 | 注册 5 个新类型 |
+| [tests/test_plots.cpp](tests/test_plots.cpp) | 扩展 | +400 | 25 项 B1 测试 (5 per type) |
 
 ### 测试增长
 
-| 指标 | Phase C 前 | Phase C 后 |
-|------|-----------|-----------|
-| 测试函数 | 21 | **30** (+9) |
-| 断言数 | 87 | **109** (+22) |
+| 指标 | Phase C | B1 |
+|------|---------|-----|
+| 图类型 | 2 (Line+Scatter) | **7** (+5) |
+| test_plots 函数 | 30 | **55** (+25) |
+| test_plots 断言 | 109 | **153** (+44) |
+| IRenderDevice 方法 | 8+1 | 8+1 (零变更) ✅ |
 
-## 当前任务
+### B1 测试覆盖
 
-- [x] LinePlot / ScatterPlot / MultiAxisManager / LegendRenderer / PlotRegistry
-- [x] 20 → 30 项单元测试（109 断言）
-- [x] P0 去重（坐标变换 + Nice Number → Agent C）
-- [x] P1 暴露内部类型声明
-- [x] Phase C 质量深化：边缘用例测试补齐
-
-## 已修改文件（Phase C）
-
-| 文件 | 操作 | 说明 |
-|------|------|------|
-| tests/test_plots.cpp | 修改 | +160 行: 新增 9 项边缘用例测试（单点、Log10、空数据、多右轴、越界、刻度集成、单/多图例） |
-| status/agent-d-status.md | 修改 | 本文件: Phase C 状态更新 |
+| 类型 | 测试数 | 覆盖场景 |
+|------|--------|---------|
+| BarPlot | 5 | 正常渲染、自动宽度、单柱、默认颜色、空数据 |
+| StepPlot | 5 | 基本阶梯、先垂直模式、单点、空数据、样式传递 |
+| ErrorBar | 5 | 非对称误差、对称误差、默认误差、单点、空数据 |
+| Histogram | 5 | 基本分箱、小数据、均匀数据、默认颜色、空数据 |
+| PolarPlot | 5 | 圆形、带标记、单点、螺旋线、空数据 |
 
 ## Gate Check
 
 | 时间 | 结果 |
 |------|------|
-| 12:15 | ✅ 通过（87 断言, 21 测试） |
-| 17:00 | ✅ 通过 — 去重后全部绿色 |
-| Phase C | ✅ 通过 — 109 断言, 30 测试, 0 warnings, 0 errors |
+| B1 build | ✅ 0 warnings, 0 errors |
+| test_plots | ✅ 55/55 tests, 153 assertions passed |
+| 其他套件 | ✅ interface_contract / test_axis / test_datatable / test_polar / test_performance / test_transform |
+| test_integration | 🟡 3 B1-mock failures (Agent E 域，需适配实际 B1 实现) |
 
 ## 阻塞项
 
-> 无。Agent D 模块质量稳固，等待合并窗口。
+> 🟡 Agent E 的 `test_integration.cpp` 有 3 个 B1 mock 断言失败。
+> 原因: Agent E 的 mock 期望值与 Agent D 的实际 B1 实现不完全一致（如 StepPlot 的折线点数计算）。
+> 影响: 不影响 Agent D 模块。Agent E 需在集成时更新 mock 期望。
+> 建议: 通知 Agent E 参考 Agent D 的 test_plots.cpp 中的实际行为更新集成测试。
+
+## 当前任务
+
+- [x] LinePlot / ScatterPlot (P0)
+- [x] MultiAxisManager / LegendRenderer / PlotRegistry
+- [x] P0 去重（transform + Nice Number → Agent C）
+- [x] Phase C 边缘测试 (+9)
+- [x] **B1: 5 种新图类型** ✅
+  - [x] bar_plot.cpp — fillRect 柱状图
+  - [x] step_plot.cpp — drawPolyline 阶梯图
+  - [x] error_bar.cpp — 误差线 + 端帽
+  - [x] histogram.cpp — Sturges 分箱直方图
+  - [x] polar_plot.cpp — 极坐标折线
+  - [x] 图类型注册 (7 total)
+  - [x] 25 项 B1 单元测试
 
 ## 备注
 
-- Agent D 在 Phase C 无显式 P0/P1/P2 分配（§12.2 五 Agent 并行，Agent D 不在列）
-- 主动补齐 9 项边缘测试：单点渲染、Log10 刻度、空数据、多轴、越界安全、图例布局
-- 所有新增测试通过，无回归
-- `xyplot_internal.h` 已去重：transform 桩 → Agent C thin wrapper, Nice Number → computeTicks()
-- Agent D 代码零 TODO/FIXME、零调试打印、零编译警告
+- B1 零 IRenderDevice 变更 — 5 种类型均复用现有 8+1 方法
+- `SeriesRenderData` 扩展向后兼容：4 个新增字段均有默认值
+- Bar / Histogram 在 lineStyle.color 为默认黑色时使用类型默认颜色
+- Histogram 使用 Sturges 公式自动确定 bin 数量
+- Polar 极坐标变换有内联桩，Agent C 的 `polar_transform.cpp` 就绪后可直接切换
+- ErrorBar 支持非对称误差 (errorLow + errorHigh)、对称误差 (仅 errorLow)、默认 5% 误差三种模式
+- StepPlot 支持先水平后垂直 / 先垂直后水平两种模式 (stepPreHorizontal)

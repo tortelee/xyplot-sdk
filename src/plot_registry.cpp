@@ -51,6 +51,12 @@ private:
     void registerBuiltins() {
         registerType("Line", createLinePlot);
         registerType("Scatter", createScatterPlot);
+        // B1 扩展
+        registerType("Bar", createBarPlot);
+        registerType("Step", createStepPlot);
+        registerType("ErrorBar", createErrorBarPlot);
+        registerType("Histogram", createHistogramPlot);
+        registerType("Polar", createPolarPlot);
     }
 
     std::unordered_map<std::string, Factory> m_factories;

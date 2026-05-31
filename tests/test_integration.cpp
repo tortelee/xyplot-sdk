@@ -12,6 +12,7 @@
 // ============================================================
 #include "xyplot/xyplot.h"
 #include "../src/hit_test.h"
+#include "../src/xyplot_internal.h"
 #include "../backends/recording/recording_device.h"
 #include <cassert>
 #include <cstdio>
@@ -467,6 +468,235 @@ void test_plot_move_semantics() {
 }
 
 // ==================================================================
+// Section 16-21: B1 Integration — PlotRegistry + Plot type pattern
+// (Phase B: P1 图类型扩展 — Agent E 集成测试)
+// ==================================================================
+
+// ── B1.1: Builtin types are registered ──
+void test_b1_builtin_types_registered() {
+    TEST("B1: Builtin Line and Scatter types are registered");
+
+    auto names = xyplot::internal::listPlotTypes();
+
+    bool hasLine = false, hasScatter = false;
+    for (auto& n : names) {
+        if (n == "Line")    hasLine = true;
+        if (n == "Scatter") hasScatter = true;
+    }
+    CHECK(hasLine);
+    CHECK(hasScatter);
+    CHECK(names.size() >= 2);
+}
+
+// ── B1.2: Register custom type and create instance ──
+void test_b1_register_custom_type() {
+    TEST("B1: Register and create a custom plot type");
+
+    // Define a minimal mock IPlotType for testing
+    struct MockPlotType : public xyplot::internal::IPlotType {
+        const char* typeName() const override { return "MockType"; }
+        void render(IRenderDevice&, const xyplot::internal::SeriesRenderData&,
+                    const xyplot::internal::AxisRenderConfig&,
+                    const xyplot::internal::DevicePlotArea&) override {}
+    };
+
+    bool ok = xyplot::internal::registerPlotType("MockType",
+        []() -> std::unique_ptr<xyplot::internal::IPlotType> {
+            return std::make_unique<MockPlotType>();
+        });
+    CHECK(ok);
+
+    auto instance = xyplot::internal::createPlotType("MockType");
+    CHECK(instance != nullptr);
+    CHECK(std::string(instance->typeName()) == "MockType");
+
+    // Verify it appears in the list
+    auto names = xyplot::internal::listPlotTypes();
+    bool found = false;
+    for (auto& n : names)
+        if (n == "MockType") found = true;
+    CHECK(found);
+}
+
+// ── B1.3: Duplicate registration is rejected ──
+void test_b1_duplicate_registration_rejected() {
+    TEST("B1: Duplicate type registration returns false");
+
+    struct DupType : public xyplot::internal::IPlotType {
+        const char* typeName() const override { return "DupType"; }
+        void render(IRenderDevice&, const xyplot::internal::SeriesRenderData&,
+                    const xyplot::internal::AxisRenderConfig&,
+                    const xyplot::internal::DevicePlotArea&) override {}
+    };
+
+    auto factory = []() -> std::unique_ptr<xyplot::internal::IPlotType> {
+        return std::make_unique<DupType>();
+    };
+
+    bool first = xyplot::internal::registerPlotType("DupType", factory);
+    bool second = xyplot::internal::registerPlotType("DupType", factory);
+
+    CHECK(first);
+    CHECK(!second);  // Duplicate must be rejected
+}
+
+// ── B1.4: Unknown type returns nullptr ──
+void test_b1_create_unknown_type() {
+    TEST("B1: Creating unknown type returns nullptr");
+
+    auto instance = xyplot::internal::createPlotType("NonExistentType_XYZ");
+    CHECK(instance == nullptr);
+}
+
+// ── B1.5: Mock Bar type integration — fillRect rendering ──
+void test_b1_mock_bar_type() {
+    TEST("B1: Mock Bar type uses fillRect via IPlotType::render");
+
+    struct BarPlotType : public xyplot::internal::IPlotType {
+        const char* typeName() const override { return "Bar"; }
+        void render(IRenderDevice& device,
+                    const xyplot::internal::SeriesRenderData& data,
+                    const xyplot::internal::AxisRenderConfig& axis,
+                    const xyplot::internal::DevicePlotArea& area) override {
+            if (data.count == 0) return;
+            double barWidth = area.width / static_cast<double>(data.count) * 0.8;
+            for (int i = 0; i < data.count; i++) {
+                double dx = xyplot::transform(data.xs[i],
+                    axis.xMin, axis.xMax,
+                    area.left, area.left + area.width,
+                    axis.xScale);
+                double dy = xyplot::transform(data.ys[i],
+                    axis.yMin, axis.yMax,
+                    area.top + area.height, area.top,
+                    axis.yScale);
+                double barLeft = dx - barWidth / 2.0;
+                double barTop = dy;
+                double barH = area.top + area.height - dy;
+                if (barH < 0) barH = 0;
+                FillStyle fill;
+                fill.color = data.lineStyle.color;
+                device.fillRect(barLeft, barTop, barWidth, barH, fill);
+            }
+        }
+    };
+
+    // Use unique name to avoid conflict with Agent D's real "Bar" type
+    bool ok = xyplot::internal::registerPlotType("__TestMockBar",
+        []() -> std::unique_ptr<xyplot::internal::IPlotType> {
+            return std::make_unique<BarPlotType>();
+        });
+    CHECK(ok);
+
+    // Verify the type can be created and renders fillRect calls
+    auto bar = xyplot::internal::createPlotType("__TestMockBar");
+    CHECK(bar != nullptr);
+
+    RecordingDevice rec;
+    rec.beginFrame();
+
+    xyplot::internal::SeriesRenderData data;
+    double xs[] = { 0.0, 1.0, 2.0, 3.0, 4.0 };
+    double ys[] = { 2.0, 4.0, 1.0, 5.0, 3.0 };
+    data.xs = xs;
+    data.ys = ys;
+    data.count = 5;
+    data.lineStyle.color = { 31, 119, 180 };
+
+    xyplot::internal::AxisRenderConfig axisCfg;
+    axisCfg.xMin = 0; axisCfg.xMax = 5;
+    axisCfg.yMin = 0; axisCfg.yMax = 6;
+
+    xyplot::internal::DevicePlotArea area;
+    area.left = 50; area.top = 20;
+    area.width = 600; area.height = 400;
+
+    bar->render(rec, data, axisCfg, area);
+    rec.endFrame();
+
+    // Bar type should produce 5 fillRect calls (one per bar)
+    CHECK(rec.callCount(RecordingDevice::FillRect) == 5);
+    CHECK(rec.hasValidFrameSequence());
+}
+
+// ── B1.6: Mock Step type integration — polyline with staircase path ──
+void test_b1_mock_step_type() {
+    TEST("B1: Mock Step type uses drawPolyline with staircase path");
+
+    struct StepPlotType : public xyplot::internal::IPlotType {
+        const char* typeName() const override { return "Step"; }
+        void render(IRenderDevice& device,
+                    const xyplot::internal::SeriesRenderData& data,
+                    const xyplot::internal::AxisRenderConfig& axis,
+                    const xyplot::internal::DevicePlotArea& area) override {
+            if (data.count < 2) return;
+            // Staircase: for each point, step horizontally then vertically
+            std::vector<double> sx, sy;
+            sx.reserve(data.count * 2);
+            sy.reserve(data.count * 2);
+            for (int i = 0; i < data.count - 1; i++) {
+                double x1 = xyplot::transform(data.xs[i],
+                    axis.xMin, axis.xMax,
+                    area.left, area.left + area.width, axis.xScale);
+                double y1 = xyplot::transform(data.ys[i],
+                    axis.yMin, axis.yMax,
+                    area.top + area.height, area.top, axis.yScale);
+                double x2 = xyplot::transform(data.xs[i+1],
+                    axis.xMin, axis.xMax,
+                    area.left, area.left + area.width, axis.xScale);
+                sx.push_back(x1); sy.push_back(y1);  // start
+                sx.push_back(x2); sy.push_back(y1);  // horizontal step
+                sx.push_back(x2);                     // vertical
+                sy.push_back(xyplot::transform(data.ys[i+1],
+                    axis.yMin, axis.yMax,
+                    area.top + area.height, area.top, axis.yScale));
+            }
+            device.drawPolyline(sx.data(), sy.data(),
+                                static_cast<int>(sx.size()), data.lineStyle);
+        }
+    };
+
+    // Use unique name to avoid conflict with Agent D's real "Step" type
+    bool ok = xyplot::internal::registerPlotType("__TestMockStep",
+        []() -> std::unique_ptr<xyplot::internal::IPlotType> {
+            return std::make_unique<StepPlotType>();
+        });
+    CHECK(ok);
+
+    auto step = xyplot::internal::createPlotType("__TestMockStep");
+    CHECK(step != nullptr);
+
+    RecordingDevice rec;
+    rec.beginFrame();
+
+    xyplot::internal::SeriesRenderData data;
+    double xs[] = { 0.0, 1.0, 2.0, 3.0 };
+    double ys[] = { 1.0, 3.0, 2.0, 4.0 };
+    data.xs = xs; data.ys = ys; data.count = 4;
+    data.lineStyle.color = { 255, 127, 14 };
+
+    xyplot::internal::AxisRenderConfig axisCfg;
+    axisCfg.xMin = 0; axisCfg.xMax = 4;
+    axisCfg.yMin = 0; axisCfg.yMax = 5;
+
+    xyplot::internal::DevicePlotArea area;
+    area.left = 50; area.top = 20;
+    area.width = 600; area.height = 400;
+
+    step->render(rec, data, axisCfg, area);
+    rec.endFrame();
+
+    // Step type produces polyline calls
+    CHECK(rec.callCount(RecordingDevice::DrawPolyline) > 0);
+    // The staircase path: 3 segments × 3 points each = 9 points total
+    const auto& calls = rec.calls();
+    for (auto& c : calls) {
+        if (c.type == RecordingDevice::DrawPolyline) {
+            CHECK_MSG(c.polylineCount == 9, "staircase: 3 segments × 3 vertices");
+        }
+    }
+}
+
+// ==================================================================
 // Main
 // ==================================================================
 int main() {
@@ -490,6 +720,14 @@ int main() {
     test_hit_test_empty_series();
     test_recording_device_reset();
     test_plot_move_semantics();
+
+    // ── B1 Integration tests ──
+    test_b1_builtin_types_registered();
+    test_b1_register_custom_type();
+    test_b1_duplicate_registration_rejected();
+    test_b1_create_unknown_type();
+    test_b1_mock_bar_type();
+    test_b1_mock_step_type();
 
     std::printf("\n═══════════════════════════════════════════\n");
     std::printf(" Results: %d passed, %d failed\n",

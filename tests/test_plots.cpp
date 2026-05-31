@@ -15,6 +15,10 @@
 #include <memory>
 #include <stdexcept>
 
+namespace {
+constexpr double PI = 3.14159265358979323846;
+}
+
 using namespace xyplot;
 using namespace xyplot::internal;
 
@@ -826,6 +830,596 @@ void test_legend_many_entries() {
 }
 
 // ============================================================
+// Section 8: B1 图类型测试
+// ============================================================
+
+// ──── 8a. BarPlot ────
+void test_bar_plot_renders_rects() {
+    auto plot = createPlotType("Bar");
+    assert(plot != nullptr);
+    assert(std::string(plot->typeName()) == "Bar");
+
+    SpyDevice device;
+    double xs[] = {1.0, 2.0, 3.0, 4.0, 5.0};
+    double ys[] = {3.0, 5.0, 2.0, 7.0, 4.0};
+
+    SeriesRenderData data;
+    data.xs = xs; data.ys = ys; data.count = 5;
+    data.lineStyle.color = {255, 100, 50};
+    data.barWidth = 0.6;
+
+    AxisRenderConfig axis;
+    axis.xMin = 0.0; axis.xMax = 6.0;
+    axis.yMin = 0.0; axis.yMax = 10.0;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 700; area.height = 500;
+
+    plot->render(device, data, axis, area);
+
+    assert(device.fillRectCalls == 5);  // 5 根柱子
+}
+
+void test_bar_plot_auto_width() {
+    auto plot = createPlotType("Bar");
+    SpyDevice device;
+    double xs[] = {0.0, 1.0, 2.0, 3.0, 4.0};
+    double ys[] = {2.0, 4.0, 3.0, 5.0, 1.0};
+
+    SeriesRenderData data;
+    data.xs = xs; data.ys = ys; data.count = 5;
+    data.lineStyle.color = {0, 0, 255};
+    // barWidth = 0 (自动)
+
+    AxisRenderConfig axis;
+    axis.xMin = -1.0; axis.xMax = 5.0;
+    axis.yMin = 0.0; axis.yMax = 6.0;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 500; area.height = 300;
+
+    plot->render(device, data, axis, area);
+
+    assert(device.fillRectCalls == 5);
+}
+
+void test_bar_plot_single_bar() {
+    auto plot = createPlotType("Bar");
+    SpyDevice device;
+    double xs[] = {2.0};
+    double ys[] = {5.0};
+
+    SeriesRenderData data;
+    data.xs = xs; data.ys = ys; data.count = 1;
+    data.lineStyle.color = {255, 0, 0};
+    data.barWidth = 1.0;
+
+    AxisRenderConfig axis;
+    axis.xMin = 0.0; axis.xMax = 4.0;
+    axis.yMin = 0.0; axis.yMax = 10.0;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, data, axis, area);
+
+    assert(device.fillRectCalls == 1);
+}
+
+void test_bar_plot_default_color() {
+    auto plot = createPlotType("Bar");
+    SpyDevice device;
+    double xs[] = {1.0, 2.0};
+    double ys[] = {3.0, 4.0};
+
+    SeriesRenderData data;
+    data.xs = xs; data.ys = ys; data.count = 2;
+    // 不设置 lineStyle.color（默认黑色 → 应使用默认柱色）
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, data, axis, area);
+
+    assert(device.fillRectCalls == 2);
+}
+
+void test_bar_plot_empty_data() {
+    auto plot = createPlotType("Bar");
+    SpyDevice device;
+    SeriesRenderData data;
+    data.xs = nullptr; data.ys = nullptr; data.count = 0;
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, data, axis, area);
+
+    assert(device.fillRectCalls == 0);
+}
+
+// ──── 8b. StepPlot ────
+void test_step_plot_basic() {
+    auto plot = createPlotType("Step");
+    assert(plot != nullptr);
+    assert(std::string(plot->typeName()) == "Step");
+
+    SpyDevice device;
+    double xs[] = {1.0, 2.0, 3.0, 4.0};
+    double ys[] = {2.0, 4.0, 3.0, 5.0};
+
+    SeriesRenderData data;
+    data.xs = xs; data.ys = ys; data.count = 4;
+    data.lineStyle.width = 2.0;
+    data.lineStyle.color = {0, 200, 0};
+
+    AxisRenderConfig axis;
+    axis.xMin = 0.0; axis.xMax = 5.0;
+    axis.yMin = 0.0; axis.yMax = 6.0;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 500; area.height = 400;
+
+    plot->render(device, data, axis, area);
+
+    // 4 个点 → 1 + (4-1)*2 = 7 个阶梯折线点
+    assert(device.drawPolylineCalls >= 1);
+    assert(device.lastPolyline.count == 7);
+}
+
+void test_step_plot_pre_vertical() {
+    auto plot = createPlotType("Step");
+    SpyDevice device;
+    double xs[] = {0.0, 1.0, 2.0};
+    double ys[] = {0.0, 2.0, 1.0};
+
+    SeriesRenderData data;
+    data.xs = xs; data.ys = ys; data.count = 3;
+    data.lineStyle.color = {0, 0, 255};
+    data.stepPreHorizontal = false;  // 先垂直后水平
+
+    AxisRenderConfig axis;
+    axis.xMin = 0.0; axis.xMax = 3.0;
+    axis.yMin = 0.0; axis.yMax = 3.0;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, data, axis, area);
+
+    assert(device.drawPolylineCalls >= 1);
+    // 3 点 → 1 + (3-1)*2 = 5 点
+    assert(device.lastPolyline.count == 5);
+}
+
+void test_step_plot_single_point() {
+    auto plot = createPlotType("Step");
+    SpyDevice device;
+    double xs[] = {5.0};
+    double ys[] = {3.0};
+
+    SeriesRenderData data;
+    data.xs = xs; data.ys = ys; data.count = 1;
+    data.lineStyle.color = {128, 0, 128};
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, data, axis, area);
+
+    assert(device.drawPolylineCalls >= 1);
+    assert(device.lastPolyline.count == 1);
+}
+
+void test_step_plot_empty_data() {
+    auto plot = createPlotType("Step");
+    SpyDevice device;
+    SeriesRenderData data;
+    data.count = 0;
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, data, axis, area);
+
+    assert(device.drawPolylineCalls == 0);
+}
+
+void test_step_plot_renders_style() {
+    auto plot = createPlotType("Step");
+    SpyDevice device;
+    double xs[] = {1.0, 2.0, 3.0};
+    double ys[] = {1.0, 3.0, 2.0};
+
+    SeriesRenderData data;
+    data.xs = xs; data.ys = ys; data.count = 3;
+    data.lineStyle.width = 3.5;
+    data.lineStyle.color = {255, 128, 0};
+    data.lineStyle.dash = LineStyle::DashLine;
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, data, axis, area);
+
+    assert(device.lastPolyline.style.width == 3.5);
+    assert(device.lastPolyline.style.dash == LineStyle::DashLine);
+}
+
+// ──── 8c. ErrorBar ────
+void test_error_bar_basic() {
+    auto plot = createPlotType("ErrorBar");
+    assert(plot != nullptr);
+    assert(std::string(plot->typeName()) == "ErrorBar");
+
+    SpyDevice device;
+    double xs[] = {1.0, 2.0, 3.0};
+    double ys[] = {5.0, 8.0, 6.0};
+    double errLow[] = {0.5, 0.8, 0.6};
+    double errHigh[] = {0.7, 1.0, 0.5};
+
+    SeriesRenderData data;
+    data.xs = xs; data.ys = ys; data.count = 3;
+    data.errorLow = errLow;
+    data.errorHigh = errHigh;
+    data.lineStyle.width = 1.5;
+    data.lineStyle.color = {200, 0, 0};
+
+    AxisRenderConfig axis;
+    axis.xMin = 0.0; axis.xMax = 4.0;
+    axis.yMin = 0.0; axis.yMax = 10.0;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 500; area.height = 400;
+
+    plot->render(device, data, axis, area);
+
+    // 每个点: 1 条垂直线 + 2 个端帽 = 3 次 drawPolyline
+    // 3 个点 → 9 次调用
+    assert(device.drawPolylineCalls == 9);
+}
+
+void test_error_bar_symmetric() {
+    auto plot = createPlotType("ErrorBar");
+    SpyDevice device;
+    double xs[] = {1.0, 2.0};
+    double ys[] = {4.0, 6.0};
+    double err[] = {0.4, 0.6};  // 对称误差
+
+    SeriesRenderData data;
+    data.xs = xs; data.ys = ys; data.count = 2;
+    data.errorLow = err;  // 对称：仅设 errorLow
+    data.errorHigh = nullptr;
+    data.lineStyle.color = {0, 0, 180};
+
+    AxisRenderConfig axis;
+    axis.xMin = 0.0; axis.xMax = 3.0;
+    axis.yMin = 0.0; axis.yMax = 8.0;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, data, axis, area);
+
+    // 2 个点 × 3 = 6 次 drawPolyline
+    assert(device.drawPolylineCalls == 6);
+}
+
+void test_error_bar_default_error() {
+    auto plot = createPlotType("ErrorBar");
+    SpyDevice device;
+    double xs[] = {2.0, 4.0};
+    double ys[] = {10.0, 20.0};
+    // 不提供 errorLow/errorHigh — 使用 5% 默认误差
+
+    SeriesRenderData data;
+    data.xs = xs; data.ys = ys; data.count = 2;
+    data.lineStyle.color = {0, 128, 128};
+
+    AxisRenderConfig axis;
+    axis.xMin = 0.0; axis.xMax = 6.0;
+    axis.yMin = 0.0; axis.yMax = 25.0;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, data, axis, area);
+
+    // 2 个点 × 3 = 6 次 drawPolyline
+    assert(device.drawPolylineCalls == 6);
+}
+
+void test_error_bar_single_point() {
+    auto plot = createPlotType("ErrorBar");
+    SpyDevice device;
+    double xs[] = {5.0};
+    double ys[] = {10.0};
+    double err[] = {2.0};
+
+    SeriesRenderData data;
+    data.xs = xs; data.ys = ys; data.count = 1;
+    data.errorLow = err;
+    data.lineStyle.color = {139, 69, 19};
+
+    AxisRenderConfig axis;
+    axis.xMin = 0.0; axis.xMax = 10.0;
+    axis.yMin = 0.0; axis.yMax = 15.0;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, data, axis, area);
+
+    assert(device.drawPolylineCalls == 3);  // 1 条垂线 + 2 个端帽
+}
+
+void test_error_bar_empty_data() {
+    auto plot = createPlotType("ErrorBar");
+    SpyDevice device;
+    SeriesRenderData data;
+    data.count = 0;
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, data, axis, area);
+
+    assert(device.drawPolylineCalls == 0);
+}
+
+// ──── 8d. Histogram ────
+void test_histogram_basic() {
+    auto plot = createPlotType("Histogram");
+    assert(plot != nullptr);
+    assert(std::string(plot->typeName()) == "Histogram");
+
+    SpyDevice device;
+    double data[] = {1.0, 1.5, 2.0, 2.0, 2.5, 3.0, 3.0, 3.0, 3.5, 4.0, 4.5, 5.0};
+
+    SeriesRenderData sdata;
+    sdata.ys = data;
+    sdata.count = 12;  // xs not used: histogram reads from ys only
+    sdata.lineStyle.color = {50, 150, 50};
+
+    AxisRenderConfig axis;
+    axis.xMin = 0.0; axis.xMax = 6.0;
+    axis.yMin = 0.0; axis.yMax = 5.0;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 500; area.height = 350;
+
+    plot->render(device, sdata, axis, area);
+
+    // 应渲染多个柱子
+    assert(device.fillRectCalls >= 3);
+}
+
+void test_histogram_small_data() {
+    auto plot = createPlotType("Histogram");
+    SpyDevice device;
+    double data[] = {5.0};
+
+    SeriesRenderData sdata;
+    sdata.ys = data;
+    sdata.count = 1;
+    sdata.lineStyle.color = {120, 80, 200};
+
+    AxisRenderConfig axis;
+    axis.xMin = 0.0; axis.xMax = 10.0;
+    axis.yMin = 0.0; axis.yMax = 2.0;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, sdata, axis, area);
+
+    // 至少 1 个柱
+    assert(device.fillRectCalls >= 1);
+}
+
+void test_histogram_uniform_data() {
+    auto plot = createPlotType("Histogram");
+    SpyDevice device;
+    // 所有数据相同 → 单柱
+    double data[] = {3.0, 3.0, 3.0, 3.0, 3.0};
+
+    SeriesRenderData sdata;
+    sdata.ys = data;
+    sdata.count = 5;
+    sdata.lineStyle.color = {200, 100, 0};
+
+    AxisRenderConfig axis;
+    axis.xMin = 0.0; axis.xMax = 6.0;
+    axis.yMin = 0.0; axis.yMax = 6.0;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, sdata, axis, area);
+
+    assert(device.fillRectCalls >= 1);
+}
+
+void test_histogram_default_color() {
+    auto plot = createPlotType("Histogram");
+    SpyDevice device;
+    double data[] = {1.0, 1.0, 2.0, 3.0, 3.0};
+
+    SeriesRenderData sdata;
+    sdata.ys = data;
+    sdata.count = 5;
+    // 不设颜色 → 应使用默认绿色
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, sdata, axis, area);
+
+    assert(device.fillRectCalls >= 1);
+}
+
+void test_histogram_empty_data() {
+    auto plot = createPlotType("Histogram");
+    SpyDevice device;
+    SeriesRenderData sdata;
+    sdata.ys = nullptr;
+    sdata.count = 0;
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, sdata, axis, area);
+
+    assert(device.fillRectCalls == 0);
+}
+
+// ──── 8e. PolarPlot ────
+void test_polar_plot_basic() {
+    auto plot = createPlotType("Polar");
+    assert(plot != nullptr);
+    assert(std::string(plot->typeName()) == "Polar");
+
+    SpyDevice device;
+    // theta (弧度): 0 → 2π, r: 常数值 → 圆形
+    int n = 36;
+    std::vector<double> theta(static_cast<size_t>(n));
+    std::vector<double> r(static_cast<size_t>(n));
+    for (int i = 0; i < n; i++) {
+        theta[static_cast<size_t>(i)] = static_cast<double>(i) * 2.0 * PI / static_cast<double>(n);
+        r[static_cast<size_t>(i)] = 5.0;
+    }
+
+    SeriesRenderData data;
+    data.xs = theta.data();  // xs = theta
+    data.ys = r.data();       // ys = r
+    data.count = n;
+    data.lineStyle.width = 2.0;
+    data.lineStyle.color = {0, 100, 200};
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 100; area.top = 20;
+    area.width = 400; area.height = 400;
+
+    plot->render(device, data, axis, area);
+
+    // 应绘制极坐标折线
+    assert(device.drawPolylineCalls >= 1);
+    assert(device.lastPolyline.count == n);
+}
+
+void test_polar_plot_with_markers() {
+    auto plot = createPlotType("Polar");
+    SpyDevice device;
+    int n = 10;
+    std::vector<double> theta(static_cast<size_t>(n));
+    std::vector<double> r(static_cast<size_t>(n));
+    for (int i = 0; i < n; i++) {
+        theta[static_cast<size_t>(i)] = static_cast<double>(i) * 2.0 * PI / static_cast<double>(n);
+        r[static_cast<size_t>(i)] = static_cast<double>(i + 1);
+    }
+
+    SeriesRenderData data;
+    data.xs = theta.data();
+    data.ys = r.data();
+    data.count = n;
+    data.lineStyle.color = {200, 50, 50};
+    data.markerStyle.size = 5.0;
+    data.markerStyle.shape = MarkerStyle::Circle;
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 100; area.top = 20;
+    area.width = 400; area.height = 400;
+
+    plot->render(device, data, axis, area);
+
+    assert(device.drawPolylineCalls >= 1);
+    assert(device.drawMarkersCalls >= 1);
+    assert(device.lastMarkers.count == n);
+}
+
+void test_polar_plot_single_point() {
+    auto plot = createPlotType("Polar");
+    SpyDevice device;
+    double theta[] = {0.785};  // π/4
+    double r[] = {3.0};
+
+    SeriesRenderData data;
+    data.xs = theta; data.ys = r; data.count = 1;
+    data.lineStyle.color = {128, 0, 128};
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 400;
+
+    plot->render(device, data, axis, area);
+
+    assert(device.drawPolylineCalls >= 1);
+    assert(device.lastPolyline.count == 1);
+}
+
+void test_polar_plot_spiral() {
+    auto plot = createPlotType("Polar");
+    SpyDevice device;
+    int n = 50;
+    std::vector<double> theta(static_cast<size_t>(n));
+    std::vector<double> r(static_cast<size_t>(n));
+    for (int i = 0; i < n; i++) {
+        theta[static_cast<size_t>(i)] = static_cast<double>(i) * 4.0 * PI / static_cast<double>(n);
+        r[static_cast<size_t>(i)] = 0.5 + static_cast<double>(i) * 0.2;
+    }
+
+    SeriesRenderData data;
+    data.xs = theta.data(); data.ys = r.data(); data.count = n;
+    data.lineStyle.width = 1.0;
+    data.lineStyle.color = {0, 150, 150};
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 100; area.top = 20;
+    area.width = 400; area.height = 400;
+
+    plot->render(device, data, axis, area);
+
+    assert(device.drawPolylineCalls >= 1);
+    assert(device.lastPolyline.count == n);
+}
+
+void test_polar_plot_empty_data() {
+    auto plot = createPlotType("Polar");
+    SpyDevice device;
+    SeriesRenderData data;
+    data.count = 0;
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 400;
+
+    plot->render(device, data, axis, area);
+
+    assert(device.drawPolylineCalls == 0);
+}
+
+// ============================================================
 // Section 7: Integration — 完整渲染流程
 // ============================================================
 void test_integration_line_and_scatter() {
@@ -943,6 +1537,38 @@ int main() {
 
     // Integration
     test_integration_line_and_scatter();
+
+    // ── B1 图类型 ──
+    // BarPlot
+    test_bar_plot_renders_rects();
+    test_bar_plot_auto_width();
+    test_bar_plot_single_bar();
+    test_bar_plot_default_color();
+    test_bar_plot_empty_data();
+    // StepPlot
+    test_step_plot_basic();
+    test_step_plot_pre_vertical();
+    test_step_plot_single_point();
+    test_step_plot_empty_data();
+    test_step_plot_renders_style();
+    // ErrorBar
+    test_error_bar_basic();
+    test_error_bar_symmetric();
+    test_error_bar_default_error();
+    test_error_bar_single_point();
+    test_error_bar_empty_data();
+    // Histogram
+    test_histogram_basic();
+    test_histogram_small_data();
+    test_histogram_uniform_data();
+    test_histogram_default_color();
+    test_histogram_empty_data();
+    // PolarPlot
+    test_polar_plot_basic();
+    test_polar_plot_with_markers();
+    test_polar_plot_single_point();
+    test_polar_plot_spiral();
+    test_polar_plot_empty_data();
 
     return 0;
 }
