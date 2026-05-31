@@ -35,7 +35,8 @@ struct SeriesInfo {
     int yAxisIndex = 0;
     LineStyle lineStyle;
     MarkerStyle markerStyle;
-    enum SeriesType { Line, Scatter };
+    enum SeriesType { Line, Scatter, Bar, Step, Area, Histogram,
+                      ErrorBar, Polar, Heatmap, Contour };
     SeriesType type = Line;
     bool visible = true;
 };
@@ -71,6 +72,11 @@ struct Plot::Impl {
 
     // Compute auto-range from visible series data
     static void computeAutoRange(Impl* impl);
+
+    // Add a series with specified type and axis binding
+    static int addSeries(Impl* impl, const char* name,
+                         const double* xs, const double* ys, int count,
+                         SeriesInfo::SeriesType type, int yAxisIndex);
 };
 
 } // namespace xyplot

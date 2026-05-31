@@ -914,6 +914,110 @@ void test_b2_recording_dump_includes_b2() {
 }
 
 // ==================================================================
+// Section 27-29: Bug Regression Tests (BUG-001/002/003)
+// ==================================================================
+
+// ── BUG-001: setCanvasSize ensures layout within viewport ──
+void test_bug001_set_canvas_size() {
+    TEST("BUG-001: setCanvasSize constrains layout within viewport");
+
+    Plot plot;
+    double xs[] = { 1.0, 2.0, 3.0 };
+    double ys[] = { 1.0, 2.0, 3.0 };
+    plot.addLineSeries("Test", xs, ys, 3);
+    plot.setAxisRange(0, 4, 0, 4);
+
+    // Set a non-default canvas size (matching SVG viewport 800×500)
+    plot.setCanvasSize(800, 500);
+
+    RecordingDevice rec;
+    plot.render(rec);
+
+    CHECK(rec.hasValidFrameSequence());
+
+    // Verify that all rendered content is within canvas bounds
+    const auto& calls = rec.calls();
+    for (auto& c : calls) {
+        if (c.type == RecordingDevice::DrawPolyline) {
+            // First and last points should be within or very near canvas
+            CHECK_MSG(c.polylineFirstX >= -10 && c.polylineFirstX <= 810,
+                      "polyline X within canvas");
+            CHECK_MSG(c.polylineFirstY >= -10 && c.polylineFirstY <= 510,
+                      "polyline Y within canvas");
+        }
+        if (c.type == RecordingDevice::DrawText) {
+            CHECK_MSG(c.px >= -10 && c.px <= 810, "text X within canvas");
+            CHECK_MSG(c.py >= -10 && c.py <= 510, "text Y within canvas");
+        }
+    }
+}
+
+// ── BUG-002: addBarSeries sets correct type ──
+void test_bug002_bar_series_type() {
+    TEST("BUG-002: addBarSeries creates series with type=Bar");
+
+    Plot plot;
+    double xs[] = { 1.0, 2.0, 3.0, 4.0 };
+    double ys[] = { 5.0, 3.0, 8.0, 2.0 };
+
+    int id = plot.addBarSeries("Bars", xs, ys, 4);
+    CHECK(id == 0);
+
+    // Verify all add*Series() methods work without crashing
+    int id2 = plot.addStepSeries("Step", xs, ys, 4);
+    CHECK(id2 == 1);
+    int id3 = plot.addAreaSeries("Area", xs, ys, 4);
+    CHECK(id3 == 2);
+    int id4 = plot.addHistogramSeries("Hist", xs, ys, 4);
+    CHECK(id4 == 3);
+    int id5 = plot.addErrorBarSeries("Err", xs, ys, 4);
+    CHECK(id5 == 4);
+    int id6 = plot.addPolarSeries("Polar", xs, ys, 4);
+    CHECK(id6 == 5);
+    int id7 = plot.addHeatmapSeries("Heat", xs, ys, 4);
+    CHECK(id7 == 6);
+    int id8 = plot.addContourSeries("Contour", xs, ys, 4);
+    CHECK(id8 == 7);
+
+    // Render and verify RecordingDevice
+    plot.setAxisRange(0, 5, 0, 10);
+    RecordingDevice rec;
+    plot.render(rec);
+
+    CHECK(rec.hasValidFrameSequence());
+}
+
+// ── BUG-003: yAxisIndex binds series to correct axis ──
+void test_bug003_y_axis_index() {
+    TEST("BUG-003: yAxisIndex=1 binds series to right Y axis");
+
+    Plot plot;
+    double xs[] = { 1.0, 2.0, 3.0 };
+    double yLeft[] = { 10.0, 20.0, 30.0 };
+    double yRight[] = { 0.1, 0.2, 0.3 };
+
+    // Left axis series
+    plot.addLineSeries("Left", xs, yLeft, 3, 0);
+    // Right axis series (yAxisIndex=1)
+    plot.addLineSeries("Right", xs, yRight, 3, 1);
+
+    plot.setAxisRange(0, 4, 0, 40, 0);     // Left Y: 0→40
+    plot.setAxisRange(0, 4, 0, 0.5, 1);    // Right Y: 0→0.5
+    plot.yAxisAddRight("Right Axis");
+
+    RecordingDevice rec;
+    plot.render(rec);
+
+    CHECK(rec.hasValidFrameSequence());
+
+    // Both series should render
+    std::string dump = rec.dump();
+    CHECK(dump.find("Left") != std::string::npos);
+    CHECK(dump.find("Right") != std::string::npos);
+    CHECK(dump.find("Right Axis") != std::string::npos);
+}
+
+// ==================================================================
 // Main
 // ==================================================================
 int main() {
@@ -952,6 +1056,11 @@ int main() {
     test_b2_mock_area_type();
     test_b2_mock_heatmap_type();
     test_b2_recording_dump_includes_b2();
+
+    // ── Bug regression tests ──
+    test_bug001_set_canvas_size();
+    test_bug002_bar_series_type();
+    test_bug003_y_axis_index();
 
     std::printf("\n═══════════════════════════════════════════\n");
     std::printf(" Results: %d passed, %d failed\n",

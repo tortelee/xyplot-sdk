@@ -1,33 +1,27 @@
 # 📋 Project Lead 公告板
 
-**最后更新**: B1 完成 → B2 启动
-**状态**: 🟢
+**最后更新**: Bug 修复启动
+**状态**: 🔴 3 个客户 Bug 待修复
 
 ---
 
-## 进度
+## 活跃指令：Bug 修复
 
-```
-Phase A (Day 1 P0):    ✅ 提交 1471e02
-Phase C (质量深化):     ✅ 提交 c1a2d6a
-Phase B1 (5 种图):      ✅ 提交 04d0f22
-Phase B2 (3 种图):      🔄 进行中
-Phase B3 (3D):          ⏳ 待定
-```
+**Bug 跟踪**: [`docs/08-bug-tracker.md`](../docs/08-bug-tracker.md)
+**修复指令**: [`docs/07-agent-coordination.md`](../docs/07-agent-coordination.md) §14
 
-## B2 活跃指令
+| Bug | 现象 | 负责 |
+|-----|------|------|
+| BUG-001 | X 轴不显示（canvas 尺寸不匹配） | Agent E |
+| BUG-002 | Bar chart 显示为曲线（缺 API） | Agent E + Agent D |
+| BUG-003 | Multi-axis 不显示（缺右轴绑定） | Agent E |
 
-**全部指令**: `docs/07-agent-coordination.md` §13.3
+| Agent | 任务 |
+|-------|------|
+| **Agent E** | Plot API 扩展: setCanvasSize + addBarSeries 等 + yAxisIndex + 回归测试 |
+| **Agent D** | render() 中按 SeriesType 分发到 IPlotType |
+| **Agent F** | Gallery 改用新 API + setCanvasSize |
+| **Agent B** | 最终 gate-check --full |
+| **Agent A** | API 变更审核 |
 
-IRenderDevice 已扩展 ✅（Project Lead 完成）：
-- `fillPolygon()` — Area Plot 使用
-- `drawImage()` — Heatmap 使用
-- 均为 virtual + 默认空实现，零破坏
-
-| Agent | 任务 | 文件 |
-|-------|------|------|
-| **Agent C** | contour_algorithm (Marching Squares) | src/contour_algorithm.h/.cpp |
-| **Agent D** | 3 种 IPlotType | src/area_plot.cpp, src/heatmap.cpp, src/contour.cpp |
-| **Agent E** | 集成 + test_integration 扩展 | tests/test_integration.cpp |
-| **Agent F** | 文档更新 | docs/API_REFERENCE.md |
-| **Agent B** | gate-check | — |
+**预计 1.5h 全部修复。**

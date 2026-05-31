@@ -26,10 +26,31 @@ public:
     Plot(Plot&&) noexcept;
     Plot& operator=(Plot&&) noexcept;
 
+    // ──── 画布 ────
+    void setCanvasSize(double width, double height);
+
     // ──── 数据绑定 ────
     int addLineSeries(const char* name,
-                      const double* xs, const double* ys, int count);
+                      const double* xs, const double* ys, int count,
+                      int yAxisIndex = 0);
     int addScatterSeries(const char* name,
+                         const double* xs, const double* ys, int count,
+                         int yAxisIndex = 0);
+    int addBarSeries(const char* name,
+                     const double* xs, const double* ys, int count);
+    int addStepSeries(const char* name,
+                      const double* xs, const double* ys, int count);
+    int addAreaSeries(const char* name,
+                      const double* xs, const double* ys, int count);
+    int addHistogramSeries(const char* name,
+                           const double* xs, const double* ys, int count);
+    int addErrorBarSeries(const char* name,
+                          const double* xs, const double* ys, int count);
+    int addPolarSeries(const char* name,
+                       const double* xs, const double* ys, int count);
+    int addHeatmapSeries(const char* name,
+                         const double* xs, const double* ys, int count);
+    int addContourSeries(const char* name,
                          const double* xs, const double* ys, int count);
     void updateSeriesData(int seriesId,
                           const double* xs, const double* ys, int count);

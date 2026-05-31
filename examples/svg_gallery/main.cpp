@@ -34,6 +34,7 @@ void makeLinePlot() {
     plot.xAxisSetLabel("X");
     plot.yAxisSetLabel("Y");
 
+    plot.setCanvasSize(800, 500);
     plot.render(svg);
     svg.finish();
 }
@@ -52,6 +53,7 @@ void makeScatterPlot() {
     plot.setAxisRange(0, 10, 0, 10);
     plot.setTitle("Scatter Plot — Random Points");
 
+    plot.setCanvasSize(800, 500);
     plot.render(svg);
     svg.finish();
 }
@@ -63,12 +65,13 @@ void makeBarChart() {
     double xs[] = {0.5, 1.5, 2.5, 3.5, 4.5, 5.5};
     double ys[] = {23, 45, 56, 78, 33, 67};
 
-    plot.addLineSeries("Sales", xs, ys, 6);
+    plot.addBarSeries("Sales", xs, ys, 6);
     plot.setAxisRange(0, 6, 0, 90);
     plot.setTitle("Bar Chart — Monthly Sales");
     plot.xAxisSetLabel("Month");
     plot.yAxisSetLabel("Revenue (K)");
 
+    plot.setCanvasSize(800, 500);
     plot.render(svg);
     svg.finish();
 }
@@ -85,13 +88,14 @@ void makeMultiAxis() {
     }
 
     plot.addLineSeries("Temperature (°C)", xs, temp, 100);
-    plot.addLineSeries("Humidity (%)", xs, humidity, 100);
+    plot.addLineSeries("Humidity (%)", xs, humidity, 100, 1);
     plot.setAxisRange(0, 20, 0, 40);
     plot.setTitle("Multi-Axis — Temperature & Humidity");
     plot.xAxisSetLabel("Time (h)");
     plot.yAxisSetLabel("Temperature (°C)");
     plot.yAxisAddRight("Humidity (%)");
 
+    plot.setCanvasSize(800, 500);
     plot.render(svg);
     svg.finish();
 }
@@ -106,10 +110,11 @@ void makePolarPlot() {
         r[i] = 2 + std::sin(theta[i] * 5) * 0.5;
     }
 
-    plot.addLineSeries("r = 2 + sin(5θ)", theta, r, 200);
+    plot.addPolarSeries("r = 2 + sin(5θ)", theta, r, 200);
     plot.setAxisRange(0, 2 * M_PI, 0, 3);
     plot.setTitle("Polar Plot — r = 2 + sin(5θ)");
 
+    plot.setCanvasSize(800, 500);
     plot.render(svg);
     svg.finish();
 }
@@ -121,12 +126,13 @@ void makeHistogram() {
     double bins[] = {0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5};
     double counts[] = {3, 8, 15, 22, 18, 10, 5, 2};
 
-    plot.addLineSeries("Distribution", bins, counts, 8);
+    plot.addHistogramSeries("Distribution", bins, counts, 8);
     plot.setAxisRange(0, 8, 0, 25);
     plot.setTitle("Histogram — Data Distribution");
     plot.xAxisSetLabel("Value");
     plot.yAxisSetLabel("Frequency");
 
+    plot.setCanvasSize(800, 500);
     plot.render(svg);
     svg.finish();
 }
@@ -139,12 +145,13 @@ void makeErrorBar() {
     double ys[] = {10, 15, 13, 18, 22, 19};
     double err[] = {1.5, 2.0, 1.0, 2.5, 1.8, 2.2};
 
-    plot.addLineSeries("Measurement", xs, ys, 6);
+    plot.addErrorBarSeries("Measurement", xs, ys, 6);
     plot.setAxisRange(0, 7, 5, 28);
     plot.setTitle("Error Bar — Measurements ± σ");
     plot.xAxisSetLabel("Sample");
     plot.yAxisSetLabel("Value");
 
+    plot.setCanvasSize(800, 500);
     plot.render(svg);
     svg.finish();
 }
@@ -159,12 +166,13 @@ void makeAreaPlot() {
         ys[i] = 5 + std::sin(xs[i] * 2) * 3 + xs[i] * 0.5;
     }
 
-    plot.addLineSeries("Signal", xs, ys, 100);
+    plot.addAreaSeries("Signal", xs, ys, 100);
     plot.setAxisRange(0, 10, 0, 12);
     plot.setTitle("Area Plot — Signal Envelope");
     plot.xAxisSetLabel("Time");
     plot.yAxisSetLabel("Amplitude");
 
+    plot.setCanvasSize(800, 500);
     plot.render(svg);
     svg.finish();
 }

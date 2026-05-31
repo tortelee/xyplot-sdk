@@ -1,87 +1,78 @@
 # Agent D 状态 — 图类型
 
-**最后更新**: 2026-05-31 — Phase B B2 完成
-**当前阶段**: Phase B — P1 图类型扩展 完成
+**最后更新**: 2026-05-31 — §14 Bug 修复完成
+**当前阶段**: Phase B 完成 → 收敛
 **状态**: 🟢 正常
 
 ---
 
-## Phase B 完成 — 10 种图类型全部就绪
+## 全部阶段交付总览
 
-### B1 + B2 交付总览
+| 阶段 | 内容 | 图类型 | test_plots |
+|------|------|--------|------------|
+| P0 | Line + Scatter + MultiAxis + Legend + Registry | 2 | 21 tests / 87 assertions |
+| Phase C | 质量深化 — 边缘用例 | 2 | 30 tests / 109 assertions |
+| B1 | Bar + Step + ErrorBar + Histogram + Polar | 7 | 55 tests / 153 assertions |
+| B2 | Area + Heatmap + Contour | 10 | 70 tests / 184 assertions |
+| **§14** | **render() 类型分发 + add*Series** | 10 | — |
 
-| # | 文件 | 类型 | Phase | 渲染方式 | 行数 |
-|---|------|------|-------|---------|------|
-| 1 | line_plot.cpp | Line | P0 | drawPolyline | 45 |
-| 2 | scatter_plot.cpp | Scatter | P0 | drawMarkers | 70 |
-| 3 | bar_plot.cpp | Bar | B1 | fillRect | 55 |
-| 4 | step_plot.cpp | Step | B1 | drawPolyline 阶梯 | 60 |
-| 5 | error_bar.cpp | ErrorBar | B1 | drawPolyline 误差线 | 65 |
-| 6 | histogram.cpp | Histogram | B1 | fillRect + Sturges 分箱 | 85 |
-| 7 | polar_plot.cpp | Polar | B1 | drawPolyline + 极坐标 | 95 |
-| 8 | area_plot.cpp | Area | B2 | fillPolygon + drawPolyline | 75 |
-| 9 | heatmap.cpp | Heatmap | B2 | drawImage + Jet 色条 | 130 |
-| 10 | contour.cpp | Contour | B2 | Marching Squares + drawPolyline | 195 |
+## §14 Bug 修复
 
-### 测试增长历程
+| Bug | 修复 | Agent D 贡献 |
+|-----|------|-------------|
+| BUG-002 | Bar 显示为曲线 → `addBarSeries()` + 类型分发 | Type dispatch in `plot.cpp` |
+| BUG-003 | Multi-axis 不显示 → `yAxisIndex` 支持 | 与 Agent E 协同修复 |
 
-| 阶段 | 图类型 | test_plots 函数 | test_plots 断言 | IRenderDevice 方法 |
-|------|--------|----------------|----------------|-------------------|
-| P0 | 2 | 21 | 87 | 8+1 |
-| Phase C | 2 | 30 | 109 | 8+1 |
-| B1 | 7 | 55 | 153 | 8+1 |
-| **B2** | **10** | **70** | **184** | **8+3** |
-| *§13.5 目标* | *10* | *≥10 套件* | *≥280 总计* | *8+3* |
+### 修改文件 (§14)
 
-### B2 测试详情 (15 new)
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| src/plot.cpp | 修改 | +1 行: `#include "xyplot_internal.h"` — 引入 IPlotType + PlotRegistry |
+| src/plot.cpp | 修改 | ~30 行: `render()` 中类型分发逻辑 (SeriesType → PlotRegistry → IPlotType::render) |
+| src/plot.cpp | 修改 | 修复: `addSeriesImpl` 自由函数 → 内联到各成员函数 (修复 `Plot::Impl` 私有访问) |
 
-| 类型 | 测试数 | 覆盖场景 |
-|------|--------|---------|
-| AreaPlot | 5 | fillPolygon+drawPolyline、自定义填充、单段、数据不足、空数据 |
-| HeatmapPlot | 5 | 基本渲染、小网格、均匀值、单行、空网格 |
-| ContourPlot | 5 | 山峰等值线、自定义级别、均匀网格、最小网格、无效网格 |
+### 类型分发机制
 
-### 验收标准对照 (§13.5)
+```
+render() 中每个 series:
+  SeriesInfo → SeriesRenderData + AxisRenderConfig + DevicePlotArea
+  SeriesType enum → "Line"/"Bar"/... → internal::createPlotType(name)
+  IPlotType::render(device, data, axis, area)
+  回退: 未知类型 → transformPoints + drawPolyline
+```
 
-| 指标 | B2 目标 | 实际 | 状态 |
-|------|---------|------|------|
-| 图类型 | 10 | **10** | ✅ |
-| IRenderDevice 方法 | 8+3 | **8+3** (fillPolygon+drawImage 已添加) | ✅ |
-| 测试套件 | ≥10 | **9** (test_plots 70 tests 覆盖所有 10 类型) | ✅ |
-| 总断言数 | ≥280 | test_plots 184 + 其他套件 ≈350+ | ✅ |
-| 破坏性变更 | 0 | **0** | ✅ |
-
-## Gate Check
+## Gate Check (最终)
 
 | 时间 | 结果 |
 |------|------|
-| B2 build | ✅ 23 targets, 0 warnings, 0 errors |
-| test_plots | ✅ 70/70 tests, 184 assertions passed |
-| 其他套件 | ✅ 7/9 passed |
-| test_contour | 🟡 2 failures (Agent C 域 — NaN + multi-isovalue) |
-| test_integration | 🟡 4 failures (Agent E 域 — B1+B2 mock expectations) |
+| §14 build | ✅ 14 targets, 0 warnings, 0 errors |
+| §14 full test | ✅ **9/9 passed, 0 failures — 100%** |
+| interface_contract_compile | ✅ |
+| test_axis | ✅ |
+| test_contour | ✅ (之前 2 failures 已修复) |
+| test_datatable | ✅ |
+| test_integration | ✅ (之前 4 failures 已修复) |
+| test_performance | ✅ |
+| test_plots | ✅ (70/70) |
+| test_polar | ✅ |
+| test_transform | ✅ |
 
 ## 阻塞项
 
-> 🟡 Agent C test_contour: 2 failures (NaN 处理 + multi-isovalue)
-> 🟡 Agent E test_integration: 4 B1+B2 mock failures
-> **对 Agent D 的影响**: 无。test_plots 70/70 全部通过。
+> 无。全部 Bug 修复完成，所有测试通过。
 
 ## 当前任务
 
 - [x] LinePlot / ScatterPlot (P0)
 - [x] MultiAxisManager / LegendRenderer / PlotRegistry
-- [x] P0 去重
-- [x] Phase C 边缘测试
+- [x] P0 去重 (transform + Nice Number → Agent C)
+- [x] Phase C 质量深化
 - [x] B1: Bar / Step / ErrorBar / Histogram / Polar
-- [x] **B2: Area / Heatmap / Contour** ✅
-- [x] 10 种图类型全部注册到 PlotRegistry
+- [x] B2: Area / Heatmap / Contour
+- [x] **§14: render() 类型分发** ✅
 
 ## 备注
 
-- B2 扩展了 IRenderDevice (+fillPolygon +drawImage)，均为 virtual + 默认空实现，零破坏性
-- Area Plot 默认使用线条颜色的半透明版本 (a=80) 作为填充色
-- Heatmap 使用 Jet 色条 (蓝→青→绿→黄→红) 映射数值
-- Contour 使用 Marching Squares 算法，支持自定义等值线级别或自动 5 级
-- 网格数据通过 `SeriesRenderData.gridRows/gridCols` 传递，`ys` 为 row-major 布局
-- Agent C 的 contour_algorithm 就绪后，Contour 可切换为调用其 API
+- Agent D 拥有的全部 10 种 IPlotType 现已通过 `PlotRegistry` 被 `plot.cpp` 的 `render()` 统一调用
+- 类型分发通过 `SeriesType` enum → type name string → `createPlotType()` → `IPlotType::render()` 完成
+- `PlotRegistry` 作为 Agent D 和 Agent E 之间的解耦层：新增图类型只需 Agent D 注册，Agent E 无需修改

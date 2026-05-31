@@ -805,4 +805,144 @@ B2 (预计 1 天):
 | IRenderDevice 方法 | 8+1 | 8+1 (不变) | **8+3** (+fillPolygon+drawImage) |
 | 测试套件 | 7 | ≥**8** | ≥**10** |
 | 总断言数 | ~190 | ≥**230** | ≥**280** |
+
+---
+
+## 十四、Bug 修复（客户反馈）
+
+**来源**：客户测试 SVG demo 发现 3 个 Bug
+**Bug 跟踪**：[`docs/08-bug-tracker.md`](./08-bug-tracker.md)
+**执行时间**：立即
+**目标**：修复 BUG-001/002/003，添加回归测试，更新 gallery
+
+### 14.1 Bug 概述
+
+| Bug | 现象 | 根因 | 责任模块 |
+|-----|------|------|---------|
+| BUG-001 | X 轴不显示 | `Plot` canvas 800×600 但 SVG 只有 800×500，底部被裁剪 | Agent E |
+| BUG-002 | Bar 显示为曲线 | Gallery 用 `addLineSeries` 画 bar；Plot API 缺 `addBarSeries()` 等 | Agent E + Agent D |
+| BUG-003 | Multi-axis 不显示 | `addLineSeries` 不支持 yAxisIndex，数据无法绑到右轴 | Agent E |
+
+### 14.2 任务分配
+
+---
+
+**Agent E — Plot API 扩展 + 回归测试** (P0, 预计 1.5h)
+
+```
+任务 1: BUG-001 — setCanvasSize()
+  新增 Plot::setCanvasSize(double width, double height)
+  确保 render() 中的 layoutCfg.totalWidth/totalHeight 使用此值
+  (当前已在用 m_impl->canvasWidth，只需暴露 setter)
+
+任务 2: BUG-002 — add*Series() 便捷方法
+  扩展 src/plot_impl.h: SeriesInfo::SeriesType 枚举:
+    → Line, Scatter, Bar, Step, Area, Histogram, ErrorBar, Polar, Heatmap, Contour
+  扩展 include/xyplot/plot.h:
+    int addLineSeries(name, xs, ys, count, yAxisIndex = 0)  // 加 yAxisIndex 参数
+    int addScatterSeries(name, xs, ys, count, yAxisIndex = 0)
+    int addBarSeries(name, xs, ys, count)
+    int addStepSeries(name, xs, ys, count)
+    int addAreaSeries(name, xs, ys, count)
+    int addHistogramSeries(name, xs, ys, count)
+    int addErrorBarSeries(name, xs, ys, count)
+    int addPolarSeries(name, xs, ys, count)
+    int addHeatmapSeries(name, xs, ys, count)
+    int addContourSeries(name, xs, ys, count)
+  实现: 所有方法委托给一个内部的 addSeriesImpl() 辅助函数
+
+任务 3: BUG-003 — yAxisIndex 支持
+  addLineSeries/addScatterSeries 支持 yAxisIndex 参数
+  render() 中根据 series.yAxisIndex 选择正确的 Y 轴范围 + 刻度
+
+任务 4: 回归测试
+  在 tests/test_integration.cpp 中新增测试:
+    - BUG-001: setCanvasSize 后布局在 viewport 内
+    - BUG-002: addBarSeries 创建的 series type = Bar
+    - BUG-003: yAxisIndex=1 的 series 绑定到右轴
+  tests/test_plots.cpp 中新增:
+    - BarPlotType::render 产生 FillRect 调用 (≥3)
+    - StepPlotType::render 产生 staircase polyline (≥3 段)
+```
+
+**Agent D — render() 类型分发** (P0, 预计 20min)
+
+```
+在 src/plot.cpp 的 render() 方法中，将当前对所有 series 统一调用
+drawPolyline 的逻辑改为按 SeriesType 分发:
+
+  for (auto& s : m_impl->series) {
+      switch (s.type) {
+          case SeriesInfo::Line:      → LinePlot 或直接 drawPolyline
+          case SeriesInfo::Scatter:   → ScatterPlot 或直接 drawMarkers
+          case SeriesInfo::Bar:       → 通过 PlotRegistry 创建 "Bar" → render()
+          case SeriesInfo::Step:      → 通过 PlotRegistry 创建 "Step" → render()
+          case SeriesInfo::Area:      → 通过 PlotRegistry 创建 "Area" → render()
+          ...
+      }
+  }
+
+  或更简洁: 用 PlotRegistry 查找 IPlotType，统一调用 type->render()
+  注意: 需要将 SeriesInfo 转换为 SeriesRenderData + AxisRenderConfig
+
+验收: Bar chart SVG 中出现 <rect> 元素
+```
+
+**Agent F — Gallery 修复** (P0, 预计 20min)
+
+```
+修改 examples/svg_gallery/main.cpp:
+  1. 每个 make*() 函数中，render() 前加:
+     plot.setCanvasSize(800, 500);
+  2. makeBarChart(): addLineSeries → addBarSeries
+  3. makeMultiAxis(): 湿度线改为 addLineSeries("Humidity", ..., 1)  // yAxisIndex=1
+  4. makeHistogram(): addLineSeries → addHistogramSeries
+  5. makeErrorBar(): addLineSeries → addErrorBarSeries
+  6. makeAreaPlot(): addLineSeries → addAreaSeries
+  7. makePolarPlot(): addLineSeries → addPolarSeries
+
+验收: 重新生成 gallery，所有 8 张图效果正确
+```
+
+**Agent B — 最终验证** (P0, 预计 10min)
+
+```
+Agent C/D/E/F 全部完成后:
+  bash scripts/gate-check.sh --full
+  确认: 全量编译 + 全部测试通过
+  确认: gallery/*.svg 中:
+    - 01_line_plot.svg 的 X 轴线 y < 500
+    - 03_bar_chart.svg 包含 <rect> 元素
+    - 04_multi_axis.svg 包含右侧 Y 轴刻度
+```
+
+**Agent A — API 变更审核** (P1, 预计 10min)
+
+```
+审查 plot.h 的新增方法是否符合冻结策略:
+  - setCanvasSize: 纯新增 ✅
+  - addBarSeries 等: 纯新增 ✅
+  - addLineSeries 新增默认参数: 非破坏性 ✅
+  - 更新 interface-freeze.md 记录此轮变更
+```
+
+### 14.3 执行节奏
+
+```
+立即  — Agent E + Agent D 并行修复
+30min — Agent F 更新 gallery 
+45min — Agent E 添加回归测试
+60min — Agent B gate-check --full
+75min — 提交 + 推送
+```
+
+### 14.4 验收标准
+
+| Bug | 验收 |
+|-----|------|
+| BUG-001 | SVG 中 X 轴线 polyline Y 坐标 < SVG height |
+| BUG-002 | `03_bar_chart.svg` 包含 `<rect>` 元素 |
+| BUG-003 | `04_multi_axis.svg` 包含右轴刻度标签 |
+| 回归 | gate-check --full 全部通过 |
+| Gallery | 全部 8 张 SVG 可用浏览器正常查看 |
 | 破坏性变更 | 0 | 0 | 0 |
