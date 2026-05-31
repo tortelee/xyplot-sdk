@@ -697,6 +697,223 @@ void test_b1_mock_step_type() {
 }
 
 // ==================================================================
+// Section 22-26: B2 Integration — fillPolygon + drawImage
+// (Phase B: IRenderDevice +2 方法 — Agent E 集成测试)
+// ==================================================================
+
+// ── B2.1: RecordingDevice records fillPolygon ──
+void test_b2_recording_fillPolygon() {
+    TEST("B2: RecordingDevice records fillPolygon calls");
+
+    RecordingDevice rec;
+    rec.beginFrame();
+
+    double xs[] = { 10.0, 100.0, 100.0, 10.0 };
+    double ys[] = { 10.0, 10.0, 80.0, 80.0 };
+    FillStyle style;
+    style.color = { 255, 100, 50, 200 };
+
+    rec.fillPolygon(xs, ys, 4, style);
+    rec.endFrame();
+
+    CHECK(rec.callCount(RecordingDevice::FillPolygon) == 1);
+    CHECK(rec.hasValidFrameSequence());
+
+    const auto& calls = rec.calls();
+    for (auto& c : calls) {
+        if (c.type == RecordingDevice::FillPolygon) {
+            CHECK_MSG(c.polylineCount == 4, "4 vertices");
+            CHECK_MSG(c.fillColor.r == 255, "red channel");
+            CHECK_MSG(c.fillColor.g == 100, "green channel");
+        }
+    }
+}
+
+// ── B2.2: RecordingDevice records drawImage ──
+void test_b2_recording_drawImage() {
+    TEST("B2: RecordingDevice records drawImage calls");
+
+    RecordingDevice rec;
+    rec.beginFrame();
+
+    uint8_t rgba[] = { 255, 0, 0, 255,  0, 255, 0, 255,
+                       0, 0, 255, 255,  128, 128, 128, 255 };
+
+    rec.drawImage(50, 50, 200, 150, rgba, 2, 2);
+    rec.endFrame();
+
+    CHECK(rec.callCount(RecordingDevice::DrawImage) == 1);
+    CHECK(rec.hasValidFrameSequence());
+
+    const auto& calls = rec.calls();
+    for (auto& c : calls) {
+        if (c.type == RecordingDevice::DrawImage) {
+            CHECK_MSG(c.px == 50 && c.py == 50, "position");
+            CHECK_MSG(c.pw == 200 && c.ph == 150, "size");
+            CHECK_MSG(c.polylineCount == 2, "imgW=2");
+            CHECK_MSG(static_cast<int>(c.markerSize) == 2, "imgH=2");
+        }
+    }
+}
+
+// ── B2.3: Mock Area type using fillPolygon via IPlotType ──
+void test_b2_mock_area_type() {
+    TEST("B2: Mock Area type renders fillPolygon + drawPolyline");
+
+    struct AreaPlotType : public xyplot::internal::IPlotType {
+        const char* typeName() const override { return "Area"; }
+        void render(IRenderDevice& device,
+                    const xyplot::internal::SeriesRenderData& data,
+                    const xyplot::internal::AxisRenderConfig& axis,
+                    const xyplot::internal::DevicePlotArea& area) override {
+            if (data.count < 2) return;
+            int n = data.count;
+            std::vector<double> tx(n), ty(n);
+            xyplot::internal::transform::transformPoints(
+                data.xs, data.ys, n, axis, area, tx.data(), ty.data());
+
+            double baseline = area.top + area.height;  // bottom of plot area
+            // Build filled polygon: curve points + baseline corners
+            std::vector<double> px, py;
+            px.reserve(n + 2);
+            py.reserve(n + 2);
+            // Top edge (the curve)
+            for (int i = 0; i < n; i++) {
+                px.push_back(tx[i]);
+                py.push_back(ty[i]);
+            }
+            // Bottom edge (close back to baseline)
+            px.push_back(tx[n-1]); py.push_back(baseline);
+            px.push_back(tx[0]);   py.push_back(baseline);
+
+            FillStyle fill;
+            fill.color = data.lineStyle.color;
+            fill.color.a = 100;  // semi-transparent
+            device.fillPolygon(px.data(), py.data(), static_cast<int>(px.size()), fill);
+
+            // Draw the top edge as a line
+            device.drawPolyline(tx.data(), ty.data(), n, data.lineStyle);
+        }
+    };
+
+    bool ok = xyplot::internal::registerPlotType("__TestMockArea",
+        []() -> std::unique_ptr<xyplot::internal::IPlotType> {
+            return std::make_unique<AreaPlotType>();
+        });
+    CHECK(ok);
+
+    auto area = xyplot::internal::createPlotType("__TestMockArea");
+    CHECK(area != nullptr);
+
+    RecordingDevice rec;
+    rec.beginFrame();
+
+    xyplot::internal::SeriesRenderData data;
+    double xs[] = { 0.0, 1.0, 2.0, 3.0, 4.0 };
+    double ys[] = { 1.0, 3.0, 2.0, 4.0, 2.0 };
+    data.xs = xs; data.ys = ys; data.count = 5;
+    data.lineStyle.color = { 31, 119, 180 };
+
+    xyplot::internal::AxisRenderConfig axisCfg;
+    axisCfg.xMin = 0; axisCfg.xMax = 5;
+    axisCfg.yMin = 0; axisCfg.yMax = 5;
+
+    xyplot::internal::DevicePlotArea dpa;
+    dpa.left = 50; dpa.top = 20; dpa.width = 600; dpa.height = 400;
+
+    area->render(rec, data, axisCfg, dpa);
+    rec.endFrame();
+
+    // Should have 1 fillPolygon (area fill) + 1 drawPolyline (top edge)
+    CHECK(rec.callCount(RecordingDevice::FillPolygon) == 1);
+    CHECK(rec.callCount(RecordingDevice::DrawPolyline) == 1);
+
+    // fillPolygon should have n+2 vertices (curve + 2 baseline corners)
+    const auto& calls = rec.calls();
+    for (auto& c : calls) {
+        if (c.type == RecordingDevice::FillPolygon) {
+            CHECK_MSG(c.polylineCount == 7, "5 curve pts + 2 baseline = 7 vertices");
+        }
+    }
+}
+
+// ── B2.4: Mock Heatmap type using drawImage via IPlotType ──
+void test_b2_mock_heatmap_type() {
+    TEST("B2: Mock Heatmap type renders drawImage");
+
+    struct HeatmapType : public xyplot::internal::IPlotType {
+        const char* typeName() const override { return "Heatmap"; }
+        void render(IRenderDevice& device,
+                    const xyplot::internal::SeriesRenderData& /*data*/,
+                    const xyplot::internal::AxisRenderConfig& /*axis*/,
+                    const xyplot::internal::DevicePlotArea& area) override {
+            // Generate a simple 4×4 heatmap image
+            const int W = 4, H = 4;
+            uint8_t rgba[W * H * 4];
+            for (int i = 0; i < W * H; i++) {
+                rgba[i*4 + 0] = static_cast<uint8_t>(i * 16);       // R
+                rgba[i*4 + 1] = static_cast<uint8_t>(128 - i * 8);  // G
+                rgba[i*4 + 2] = static_cast<uint8_t>(255 - i * 16); // B
+                rgba[i*4 + 3] = 255;                                 // A
+            }
+            device.drawImage(area.left, area.top,
+                             area.width, area.height,
+                             rgba, W, H);
+        }
+    };
+
+    bool ok = xyplot::internal::registerPlotType("__TestMockHeatmap",
+        []() -> std::unique_ptr<xyplot::internal::IPlotType> {
+            return std::make_unique<HeatmapType>();
+        });
+    CHECK(ok);
+
+    auto heatmap = xyplot::internal::createPlotType("__TestMockHeatmap");
+    CHECK(heatmap != nullptr);
+
+    RecordingDevice rec;
+    rec.beginFrame();
+
+    xyplot::internal::SeriesRenderData data;
+    data.count = 0;
+    xyplot::internal::AxisRenderConfig axisCfg;
+    xyplot::internal::DevicePlotArea dpa;
+    dpa.left = 30; dpa.top = 20; dpa.width = 640; dpa.height = 480;
+
+    heatmap->render(rec, data, axisCfg, dpa);
+    rec.endFrame();
+
+    CHECK(rec.callCount(RecordingDevice::DrawImage) == 1);
+
+    const auto& calls = rec.calls();
+    for (auto& c : calls) {
+        if (c.type == RecordingDevice::DrawImage) {
+            CHECK_MSG(c.polylineCount == 4, "imgW=4");
+            CHECK_MSG(static_cast<int>(c.markerSize) == 4, "imgH=4");
+        }
+    }
+}
+
+// ── B2.5: RecordingDevice dump includes B2 call types ──
+void test_b2_recording_dump_includes_b2() {
+    TEST("B2: RecordingDevice dump() includes fillPolygon and drawImage");
+
+    RecordingDevice rec;
+    rec.beginFrame();
+    double xs[] = { 0, 50, 50, 0 };
+    double ys[] = { 0, 0, 30, 30 };
+    FillStyle fs; fs.color = { 10, 20, 30, 40 };
+    rec.fillPolygon(xs, ys, 4, fs);
+    uint8_t rgba[] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
+    rec.drawImage(5, 5, 10, 10, rgba, 2, 2);
+    rec.endFrame();
+
+    std::string dump = rec.dump();
+    CHECK(dump.find("fillPolygon") != std::string::npos);
+    CHECK(dump.find("drawImage") != std::string::npos);
+}
+
+// ==================================================================
 // Main
 // ==================================================================
 int main() {
@@ -728,6 +945,13 @@ int main() {
     test_b1_create_unknown_type();
     test_b1_mock_bar_type();
     test_b1_mock_step_type();
+
+    // ── B2 Integration tests ──
+    test_b2_recording_fillPolygon();
+    test_b2_recording_drawImage();
+    test_b2_mock_area_type();
+    test_b2_mock_heatmap_type();
+    test_b2_recording_dump_includes_b2();
 
     std::printf("\n═══════════════════════════════════════════\n");
     std::printf(" Results: %d passed, %d failed\n",

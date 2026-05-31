@@ -34,7 +34,9 @@ public:
         DrawMarkers,
         DrawText,
         FillRect,
-        TextExtent
+        TextExtent,
+        FillPolygon,   // B2
+        DrawImage      // B2
     };
 
     static const char* callTypeName(CallType t) {
@@ -48,6 +50,8 @@ public:
         case DrawText:      return "drawText";
         case FillRect:      return "fillRect";
         case TextExtent:    return "textExtent";
+        case FillPolygon:   return "fillPolygon";
+        case DrawImage:     return "drawImage";
         default:            return "unknown";
         }
     }
@@ -162,6 +166,39 @@ public:
         m_calls.push_back(c);
     }
 
+    // ── B2: fillPolygon ──
+    void fillPolygon(const double* xs, const double* ys,
+                     int count, const FillStyle& style) override {
+        RecordedCall c;
+        c.type = FillPolygon;
+        c.callIndex = nextIndex();
+        c.polylineCount = count;
+        c.fillColor = style.color;
+        if (count > 0) {
+            c.polylineFirstX = xs[0];
+            c.polylineFirstY = ys[0];
+            c.polylineLastX = xs[count - 1];
+            c.polylineLastY = ys[count - 1];
+        }
+        m_calls.push_back(c);
+    }
+
+    // ── B2: drawImage ──
+    void drawImage(double x, double y, double w, double h,
+                   const uint8_t* rgba, int imgW, int imgH) override {
+        RecordedCall c;
+        c.type = DrawImage;
+        c.callIndex = nextIndex();
+        c.px = x; c.py = y; c.pw = w; c.ph = h;
+        c.polylineCount = imgW;      // reuse: imgW
+        c.markerSize = static_cast<double>(imgH);  // reuse: imgH
+        // Store first RGBA pixel as a sample
+        if (rgba && imgW > 0 && imgH > 0) {
+            c.fillColor = { rgba[0], rgba[1], rgba[2], rgba[3] };
+        }
+        m_calls.push_back(c);
+    }
+
     void textExtent(const char* text, const FontDesc& font,
                     double* w, double* h) override {
         RecordedCall c;
@@ -254,6 +291,22 @@ public:
                 std::snprintf(buf, sizeof(buf),
                     "[textExtent] text=\"%s\" fontSize=%.1f → w=%.1f h=%.1f\n",
                     c.text.c_str(), c.fontSize, c.pw, c.ph);
+                out += buf;
+                break;
+            case FillPolygon:
+                std::snprintf(buf, sizeof(buf),
+                    "[fillPolygon] count=%d first=(%.1f,%.1f) color=(%d,%d,%d)\n",
+                    c.polylineCount, c.polylineFirstX, c.polylineFirstY,
+                    (int)c.fillColor.r, (int)c.fillColor.g, (int)c.fillColor.b);
+                out += buf;
+                break;
+            case DrawImage:
+                std::snprintf(buf, sizeof(buf),
+                    "[drawImage] x=%.1f y=%.1f w=%.1f h=%.1f img=%dx%d firstPixel=(%d,%d,%d,%d)\n",
+                    c.px, c.py, c.pw, c.ph,
+                    c.polylineCount, (int)c.markerSize,
+                    (int)c.fillColor.r, (int)c.fillColor.g,
+                    (int)c.fillColor.b, (int)c.fillColor.a);
                 out += buf;
                 break;
             }

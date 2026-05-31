@@ -57,6 +57,10 @@ private:
         registerType("ErrorBar", createErrorBarPlot);
         registerType("Histogram", createHistogramPlot);
         registerType("Polar", createPolarPlot);
+        // B2 扩展
+        registerType("Area", createAreaPlot);
+        registerType("Heatmap", createHeatmapPlot);
+        registerType("Contour", createContourPlot);
     }
 
     std::unordered_map<std::string, Factory> m_factories;

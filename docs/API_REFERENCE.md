@@ -348,6 +348,75 @@ void textExtent(const char* text, const FontDesc& font,
 }
 ```
 
+#### fillPolygon(xs, ys, count, style) [P1 — 默认空实现]
+
+填充任意多边形。P1 Area Plot 使用此方法绘制填充区域。
+
+**参数**：
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `xs` | `const double*` | 多边形顶点 X 坐标数组（设备空间像素） |
+| `ys` | `const double*` | 多边形顶点 Y 坐标数组（设备空间像素） |
+| `count` | `int` | 顶点数 (≥ 3) |
+| `style` | `const FillStyle&` | 填充样式（颜色 + 透明度） |
+
+**默认实现**：空操作。此方法为 P1 扩展，标记为 `virtual` 而非纯虚——不实现不影响 P0 功能。
+
+**实现建议**：
+
+```cpp
+void fillPolygon(const double* xs, const double* ys,
+                 int count, const xyplot::FillStyle& style) override {
+    // Qt: QPainterPath + drawPolygon
+    // Blend2D: BLPath + fillPath
+    // OpenGL: glBegin(GL_POLYGON) / triangle fan
+}
+```
+
+---
+
+#### drawImage(x, y, w, h, rgba, imgW, imgH) [P1 — 默认空实现]
+
+将像素图像渲染到设备空间的指定矩形区域。P1 Heatmap 使用此方法渲染热力矩阵。
+
+**参数**：
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `x`, `y`, `w`, `h` | `double` | 目标矩形（设备空间像素） |
+| `rgba` | `const uint8_t*` | RGBA 像素数据，大小为 `imgW × imgH × 4` |
+| `imgW`, `imgH` | `int` | 源图像宽度和高度（像素） |
+
+**默认实现**：空操作。此方法为 P1 扩展，不实现不影响 P0 功能。
+
+**实现建议**：
+
+```cpp
+void drawImage(double x, double y, double w, double h,
+               const uint8_t* rgba, int imgW, int imgH) override {
+    // Qt: QImage(rgba, imgW, imgH, QImage::Format_RGBA8888) → QPainter::drawImage
+    // Blend2D: BLImage + BLContext::blitImage
+    // OpenGL: glTexImage2D + textured quad
+}
+```
+
+---
+
+### 3.2 方法总览
+
+| 方法 | 优先级 | 类型 | 覆盖场景 |
+|------|--------|------|---------|
+| `beginFrame` / `endFrame` | P0 必需 | 纯虚 | 帧生命周期 |
+| `setClipRect` / `resetClip` | P0 必需 | 纯虚 | 裁剪 |
+| `drawPolyline` | P0 必需 | 纯虚 | 折线图、坐标轴、网格线 |
+| `drawMarkers` | P0 必需 | 纯虚 | 散点图、数据点标记 |
+| `drawText` | P0 必需 | 纯虚 | 标题、轴标签、刻度标签 |
+| `fillRect` | P0 必需 | 纯虚 | 图例色块、背景 |
+| `textExtent` | P0 可降级 | 虚（有默认） | 文本度量 |
+| `fillPolygon` | **P1 扩展** | 虚（默认空） | Area Plot 填充 |
+| `drawImage` | **P1 扩展** | 虚（默认空） | Heatmap 像素渲染 |
+
 ---
 
 ## 4. 输入事件接口 (iinput_source.h)
@@ -815,7 +884,20 @@ namespace xyplot::internal {
 }
 ```
 
-**内置图类型**：`"Line"`, `"Scatter"`
+**内置图类型**：
+
+| 图类型 | 注册名 | 优先级 | 说明 |
+|--------|--------|--------|------|
+| Line Plot | `"Line"` | P0 | 折线图 |
+| Scatter Plot | `"Scatter"` | P0 | 散点图 |
+| Bar Chart | `"Bar"` | P1 | 柱状图（fillRect 绘制） |
+| Step Plot | `"Step"` | P1 | 阶梯图（drawPolyline 阶梯路径） |
+| Error Bar | `"ErrorBar"` | P1 | 误差棒（drawPolyline 误差线） |
+| Histogram | `"Histogram"` | P1 | 直方图（fillRect + 分箱） |
+| Polar Plot | `"Polar"` | P1 | 极坐标图（drawPolyline + 极坐标变换） |
+| Area Plot | `"Area"` | P1 B2 | 面积图（fillPolygon 填充 + drawPolyline 边界） |
+| Heatmap | `"Heatmap"` | P1 B2 | 热力图（drawImage 像素渲染） |
+| Contour | `"Contour"` | P1 B2 | 等值线图（Marching Squares + drawPolyline） |
 
 **自定义图类型**：实现 `IPlotType` 接口并通过 `registerPlotType` 注册。
 

@@ -1,7 +1,7 @@
 # Agent F 状态 — 文档 & 示例
 
-**最后更新**: 2026-05-31 — §12 Phase C 文档同步检查完成
-**当前阶段**: Phase C — 质量深化
+**最后更新**: 2026-05-31 — §13.3 B2 文档同步完成
+**当前阶段**: Phase B — P1 图类型扩展 (B2)
 **状态**: 🟢 正常
 
 ---
@@ -15,59 +15,60 @@
 - [x] README.md + API_REFERENCE.md
 - [x] 3 个完整示例（minimal / qt_backend / blend2d_demo）
 - [x] 验证 minimal 示例编译运行
-- [x] **§12 文档同步检查**（Phase C 质量深化）：
-  - [x] 核对 API_REFERENCE.md 覆盖 include/ 下全部公开类型 → ✅ 全覆盖
-  - [x] 核对 Agent C 的 src/*.h 文档完整性 → 修复 4 个缺口
-  - [x] 验证 README.md 构建命令 → ✅ cmake -B build + cmake --build build 通过
+- [x] **§12 文档同步检查**（Phase C 质量深化）
+- [x] **§13.3 B2 文档同步**（IRenderDevice P1 扩展 + P1 图类型）：
+  - [x] API_REFERENCE §3 — 补充 `fillPolygon` + `drawImage` 方法文档 + 方法总览表
+  - [x] API_REFERENCE §8 — 补充 10 种图类型完整列表（P0 + P1 B1 + P1 B2）
+  - [x] README.md — 更新图类型矩阵（分 B1/B2 两批）+ IRenderDevice 方法数
+  - [x] 验证编译通过
 - [ ] **【P1】集成后验证**：Agent C/D/E 完成模块切换后：
   - [ ] 重新编译 minimal 示例，确认仍可运行
   - [ ] 检查 API_REFERENCE.md 是否需要同步更新
   - [ ] 如有 API 变更，更新文档
 - [ ] Day 5 代码审查辅助（待其他 Agent 代码完全稳定）
 
+## B2 文档修改摘要
+
+### API_REFERENCE.md
+
+| 修改点 | 内容 |
+|--------|------|
+| §3 新增 `fillPolygon` 文档 | 参数表 + 默认实现说明 + Qt/Blend2D/OpenGL 实现建议 |
+| §3 新增 `drawImage` 文档 | 参数表 + 默认实现说明 + Qt/Blend2D/OpenGL 实现建议 |
+| §3.2 方法总览表 | 11 个方法完整矩阵 (P0 必需 8 + P0 可降级 1 + P1 扩展 2) |
+| §8 图类型列表 | 从 2 种扩展到 10 种：Line/Scatter (P0) + Bar/Step/ErrorBar/Histogram/Polar (B1) + Area/Heatmap/Contour (B2) |
+
+### README.md
+
+| 修改点 | 内容 |
+|--------|------|
+| 图类型矩阵 | 从 5 行扩展到 12 行，区分 P0/B1/B2 三批 |
+| 核心特性表 | "8+1" → "8+1 P0 + 2 P1"，说明 B2 扩展为非纯虚 |
+| 架构图 | "8 纯虚方法" → "8+1 P0 + 2 P1" |
+
 ## §12 文档同步检查结果
 
-### 1. include/xyplot/*.h 覆盖完整性
+| 头文件 | 覆盖状态 |
+|--------|---------|
+| types.h — 全部公开类型 | ✅ |
+| irender_device.h — 全部 8+1+2 方法 | ✅ |
+| iinput_source.h — InputEvent + IInputSource | ✅ |
+| plot.h — Plot 全部方法 + InteractionResult | ✅ |
+| xyplot.h — include-all | ✅ |
+| src/*.h — 全部内部模块 | ✅（§12 修复 4 个缺口） |
 
-| 头文件 | 类型 | 覆盖 |
-|--------|------|------|
-| types.h | Color, LineStyle, MarkerStyle, FillStyle, FontDesc, TextStyle, ScaleType, DataPoint, Rect | ✅ 全部 |
-| irender_device.h | IRenderDevice (8+1 方法) | ✅ 全部 |
-| iinput_source.h | InputEvent, IInputSource | ✅ 全部 |
-| plot.h | Plot (全部方法), InteractionResult | ✅ 全部 |
-| xyplot.h | (include-all) | ✅ |
-
-### 2. Agent C 内部头文件 (§7) 完整性
-
-| 头文件 | 检查结果 | 动作 |
-|--------|---------|------|
-| datatable.h (§7.1) | ✅ 覆盖完整 | — |
-| axis_system.h (§7.2) | ❌ 缺失 AxisConfig, AxisTicks, TickInfo 结构体 | ✅ 已补充 |
-| coordinate_transform.h (§7.3) | ❌ 缺失 transformArray 函数 | ✅ 已补充 |
-| layout_engine.h (§7.4) | ❌ 缺失 LayoutConfig 结构体，LayoutResult 字段不完整 | ✅ 已补充 |
-
-**修复摘要**：
-- `§7.2` +45 行: AxisConfig / AxisTicks / TickInfo 结构体定义 + 文档
-- `§7.3` +5 行: transformArray() 函数签名
-- `§7.4` +60 行: LayoutConfig / LayoutResult 完整字段文档
-- `§5.2` +6 行: xAxisSetLabel() / yAxisSetLabel() 独立条目
-
-### 3. README 构建命令验证
-
-| 命令 | 结果 |
-|------|------|
-| `cmake -B build -DCMAKE_BUILD_TYPE=Release` | ✅ Configure 通过 |
-| `cmake --build build --config Release` | ✅ xyplot 库 + 契约测试 + minimal 示例编译通过 |
-| `cd build && ctest --output-on-failure` | ✅ 契约测试通过 |
-
-> ℹ️ 注: `test_plots.cpp` 和 `test_integration.cpp` 编译失败属 Agent D/E 域内问题（内部类型声明缺失），不影响核心库和文档。
-
-## 已修改文件（本次 §12 质量检查）
+## 已修改文件（累计）
 
 | 文件 | 操作 | 说明 |
 |------|------|------|
-| docs/API_REFERENCE.md | 修改 | 4 处补充: AxisConfig/AxisTicks, transformArray, LayoutConfig, xAxisSetLabel/yAxisSetLabel |
-| status/agent-f-status.md | 修改 | 本文件: §12 检查结果记录 |
+| README.md | 新建+修改 | 项目文档 + B2 更新 |
+| docs/API_REFERENCE.md | 新建+修改 | API 参考 + §12 修复 + B2 补充 |
+| examples/minimal/main.cpp | 新建 | 最小示例 |
+| examples/qt_backend/qt_render_device.h | 新建 | Qt 渲染设备 |
+| examples/qt_backend/main.cpp | 新建 | Qt 集成 Demo |
+| examples/blend2d_demo/blend2d_render_device.h | 新建 | Blend2D 渲染设备 |
+| examples/blend2d_demo/main.cpp | 新建 | Blend2D Demo |
+| status/agent-f-status.md | 修改 | 状态同步（多次） |
 
 ## 阻塞项
 
@@ -75,6 +76,6 @@
 
 ## 备注
 
-- 当前 API_REFERENCE.md 已完整覆盖 include/xyplot/*.h 全部公开接口 和 src/*.h 全部内部模块
-- Agent C 的 src/*.h 在 §7 中标注为"内部模块"，客户自定义图类型时可参考
-- 【P1】集成后验证需等待 Agent C/D/E 模块切换完成后执行
+- B2 文档基于 Agent A 已完成的 `irender_device.h` P1 扩展（`fillPolygon` + `drawImage`）编写
+- B1/B2 图类型的具体实现（Agent D 的 bar_plot.cpp 等）尚未合并，文档标注为预期 API
+- Agent C/D/E 模块切换完成后需执行【P1】集成后验证

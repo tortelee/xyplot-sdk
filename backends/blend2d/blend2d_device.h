@@ -232,6 +232,38 @@ public:
         m_context.fillRect(BLRect(x, y, w, h));
     }
 
+    // ── B2: fillPolygon ──
+    void fillPolygon(const double* xs, const double* ys,
+                     int count, const FillStyle& style) override {
+        if (count < 3) return;
+        BLRgba32 color(style.color.r, style.color.g,
+                       style.color.b, style.color.a);
+        BLPath path;
+        path.moveTo(xs[0], ys[0]);
+        for (int i = 1; i < count; i++)
+            path.lineTo(xs[i], ys[i]);
+        path.close();
+        m_context.setFillStyle(color);
+        m_context.fillPath(path);
+    }
+
+    // ── B2: drawImage ──
+    void drawImage(double x, double y, double w, double h,
+                   const uint8_t* rgba, int imgW, int imgH) override {
+        if (!rgba || imgW <= 0 || imgH <= 0) return;
+        // Wrap RGBA data as a Blend2D image and blit
+        BLImage blImg(imgW, imgH, BL_FORMAT_PRGB32);
+        // Copy pixel data (BL_FORMAT_PRGB32 = 4 bytes per pixel)
+        BLImageData imgData;
+        blImg.getData(&imgData);
+        if (imgData.pixelData) {
+            std::memcpy(imgData.pixelData, rgba,
+                        static_cast<size_t>(imgW) * imgH * 4);
+        }
+        m_context.blitImage(BLPoint(x, y), blImg,
+                            BLRectI(0, 0, imgW, imgH));
+    }
+
     // ── Accessors ──
     BLImage& image() { return *m_image; }
     const BLImage& image() const { return *m_image; }
@@ -269,6 +301,10 @@ public:
                   const FontDesc&, const TextStyle&) override {}
     void fillRect(double, double, double, double,
                   const FillStyle&) override {}
+    void fillPolygon(const double*, const double*, int,
+                     const FillStyle&) override {}
+    void drawImage(double, double, double, double,
+                   const uint8_t*, int, int) override {}
 
     bool isClipping() const { return m_clipping; }
 

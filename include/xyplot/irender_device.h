@@ -48,6 +48,22 @@ public:
         if (w) *w = static_cast<double>(std::strlen(text ? text : "")) * approxCharWidth;
         if (h) *h = font.size * 1.25;
     }
+
+    // ──── P1 扩展 (B2 — 带默认空实现) ────
+
+    // 填充任意多边形（Area Plot 使用）
+    virtual void fillPolygon(const double* xs, const double* ys,
+                             int count, const FillStyle& style) {
+        (void)xs; (void)ys; (void)count; (void)style;
+    }
+
+    // 渲染像素图像（Heatmap 使用）
+    // rgba: RGBA 格式，imgW×imgH 像素 → 映射到设备空间 (x,y,w,h)
+    virtual void drawImage(double x, double y, double w, double h,
+                           const uint8_t* rgba, int imgW, int imgH) {
+        (void)x; (void)y; (void)w; (void)h;
+        (void)rgba; (void)imgW; (void)imgH;
+    }
 };
 
 } // namespace xyplot

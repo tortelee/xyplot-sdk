@@ -36,6 +36,12 @@ struct SeriesRenderData {
     const double* errorHigh = nullptr;  // ErrorBar: 上误差值（与 ys 等长）
     double barWidth = 0.0;              // Bar/Histogram: 柱宽（0 = 自动计算）
     bool stepPreHorizontal = true;      // Step: true=先水平后垂直, false=先垂直后水平
+    // ── B2 扩展字段（网格数据 + 填充样式）──
+    int gridRows = 0;                  // >0: ys 为 row-major 网格 (Heatmap/Contour)
+    int gridCols = 0;
+    const double* contourLevels = nullptr;  // Contour: 等值线值数组
+    int contourLevelCount = 0;
+    FillStyle areaFill{};              // Area: 填充样式（默认半透明）
 };
 
 /// 轴配置（用于坐标变换）
@@ -213,6 +219,11 @@ std::unique_ptr<IPlotType> createStepPlot();
 std::unique_ptr<IPlotType> createErrorBarPlot();
 std::unique_ptr<IPlotType> createHistogramPlot();
 std::unique_ptr<IPlotType> createPolarPlot();
+
+// ── B2 图类型工厂 ──
+std::unique_ptr<IPlotType> createAreaPlot();
+std::unique_ptr<IPlotType> createHeatmapPlot();
+std::unique_ptr<IPlotType> createContourPlot();
 
 } // namespace internal
 } // namespace xyplot

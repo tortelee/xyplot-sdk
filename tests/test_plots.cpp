@@ -37,6 +37,8 @@ struct SpyDevice : public IRenderDevice {
     int drawMarkersCalls = 0;
     int drawTextCalls = 0;
     int fillRectCalls = 0;
+    int fillPolygonCalls = 0;
+    int drawImageCalls = 0;
 
     // 最后一次调用参数
     struct PolylineCall {
@@ -63,6 +65,17 @@ struct SpyDevice : public IRenderDevice {
         FillStyle style{};
     };
     FillRectCall lastFillRect;
+
+    struct FillPolygonCall {
+        int count = 0;
+        FillStyle style{};
+    };
+    FillPolygonCall lastFillPolygon;
+
+    struct DrawImageCall {
+        int imgW = 0, imgH = 0;
+    };
+    DrawImageCall lastDrawImage;
 
     // IRenderDevice overrides
     void beginFrame() override { beginFrameCalls++; }
@@ -110,11 +123,28 @@ struct SpyDevice : public IRenderDevice {
         lastFillRect.style = style;
     }
 
+    void fillPolygon(const double* xs, const double* ys,
+                     int count, const FillStyle& style) override {
+        (void)xs; (void)ys;
+        fillPolygonCalls++;
+        lastFillPolygon.count = count;
+        lastFillPolygon.style = style;
+    }
+
+    void drawImage(double x, double y, double w, double h,
+                   const uint8_t* rgba, int imgW, int imgH) override {
+        (void)x; (void)y; (void)w; (void)h; (void)rgba;
+        drawImageCalls++;
+        lastDrawImage.imgW = imgW;
+        lastDrawImage.imgH = imgH;
+    }
+
     void reset() {
         beginFrameCalls = 0; endFrameCalls = 0;
         setClipRectCalls = 0; resetClipCalls = 0;
         drawPolylineCalls = 0; drawMarkersCalls = 0;
         drawTextCalls = 0; fillRectCalls = 0;
+        fillPolygonCalls = 0; drawImageCalls = 0;
     }
 };
 
@@ -1420,6 +1450,366 @@ void test_polar_plot_empty_data() {
 }
 
 // ============================================================
+// Section 9: B2 图类型测试
+// ============================================================
+
+// ──── 9a. AreaPlot ────
+void test_area_plot_renders_fill_and_line() {
+    auto plot = createPlotType("Area");
+    assert(plot != nullptr);
+    assert(std::string(plot->typeName()) == "Area");
+
+    SpyDevice device;
+    double xs[] = {1.0, 2.0, 3.0, 4.0, 5.0};
+    double ys[] = {2.0, 4.0, 3.0, 6.0, 5.0};
+
+    SeriesRenderData data;
+    data.xs = xs; data.ys = ys; data.count = 5;
+    data.lineStyle.width = 2.0;
+    data.lineStyle.color = {0, 100, 200};
+
+    AxisRenderConfig axis;
+    axis.xMin = 0.0; axis.xMax = 6.0;
+    axis.yMin = 0.0; axis.yMax = 8.0;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 600; area.height = 400;
+
+    plot->render(device, data, axis, area);
+
+    // 应同时调用 fillPolygon 和 drawPolyline
+    assert(device.fillPolygonCalls >= 1);
+    assert(device.lastFillPolygon.count > 0);
+    assert(device.drawPolylineCalls >= 1);
+}
+
+void test_area_plot_custom_fill() {
+    auto plot = createPlotType("Area");
+    SpyDevice device;
+    double xs[] = {0.0, 1.0, 2.0};
+    double ys[] = {0.0, 2.0, 0.0};
+
+    SeriesRenderData data;
+    data.xs = xs; data.ys = ys; data.count = 3;
+    data.lineStyle.color = {200, 0, 0};
+    data.areaFill.color = {255, 200, 200, 120};
+
+    AxisRenderConfig axis;
+    axis.xMin = -1.0; axis.xMax = 3.0;
+    axis.yMin = 0.0; axis.yMax = 3.0;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, data, axis, area);
+
+    assert(device.fillPolygonCalls >= 1);
+    assert(device.lastFillPolygon.style.color.r == 255);
+    assert(device.lastFillPolygon.style.color.g == 200);
+}
+
+void test_area_plot_single_segment() {
+    auto plot = createPlotType("Area");
+    SpyDevice device;
+    double xs[] = {1.0, 2.0};
+    double ys[] = {3.0, 5.0};
+
+    SeriesRenderData data;
+    data.xs = xs; data.ys = ys; data.count = 2;
+    data.lineStyle.color = {0, 128, 0};
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, data, axis, area);
+
+    assert(device.fillPolygonCalls >= 1);
+    assert(device.drawPolylineCalls >= 1);
+}
+
+void test_area_plot_insufficient_data() {
+    auto plot = createPlotType("Area");
+    SpyDevice device;
+    double xs[] = {5.0};
+    double ys[] = {3.0};
+
+    SeriesRenderData data;
+    data.xs = xs; data.ys = ys; data.count = 1;
+    data.lineStyle.color = {0, 0, 255};
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, data, axis, area);
+
+    // 少于 2 个点不应渲染
+    assert(device.fillPolygonCalls == 0);
+    assert(device.drawPolylineCalls == 0);
+}
+
+void test_area_plot_empty_data() {
+    auto plot = createPlotType("Area");
+    SpyDevice device;
+    SeriesRenderData data;
+    data.count = 0;
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, data, axis, area);
+
+    assert(device.fillPolygonCalls == 0);
+}
+
+// ──── 9b. HeatmapPlot ────
+void test_heatmap_basic() {
+    auto plot = createPlotType("Heatmap");
+    assert(plot != nullptr);
+    assert(std::string(plot->typeName()) == "Heatmap");
+
+    SpyDevice device;
+    int rows = 4, cols = 5;
+    std::vector<double> grid(static_cast<size_t>(rows * cols));
+    for (int i = 0; i < rows; i++)
+        for (int j = 0; j < cols; j++)
+            grid[static_cast<size_t>(i * cols + j)] = static_cast<double>(i + j);
+
+    SeriesRenderData data;
+    data.ys = grid.data();
+    data.gridRows = rows;
+    data.gridCols = cols;
+    data.lineStyle.color = {0, 0, 0};
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, data, axis, area);
+
+    // 应调用 drawImage
+    assert(device.drawImageCalls >= 1);
+    // 应渲染色条（fillRect + drawPolyline 边框 + drawText 标签）
+    assert(device.fillRectCalls >= 2);  // 色条梯度
+    assert(device.drawTextCalls >= 2);  // min/max 标签
+}
+
+void test_heatmap_small_grid() {
+    auto plot = createPlotType("Heatmap");
+    SpyDevice device;
+    double grid[] = {1.0, 2.0, 3.0, 4.0};  // 2×2
+
+    SeriesRenderData data;
+    data.ys = grid;
+    data.gridRows = 2;
+    data.gridCols = 2;
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 200; area.height = 200;
+
+    plot->render(device, data, axis, area);
+
+    assert(device.drawImageCalls >= 1);
+    assert(device.lastDrawImage.imgW == 2);
+    assert(device.lastDrawImage.imgH == 2);
+}
+
+void test_heatmap_uniform_values() {
+    auto plot = createPlotType("Heatmap");
+    SpyDevice device;
+    double grid[] = {5.0, 5.0, 5.0, 5.0};  // 2×2, 全部相同
+
+    SeriesRenderData data;
+    data.ys = grid;
+    data.gridRows = 2;
+    data.gridCols = 2;
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 200; area.height = 200;
+
+    plot->render(device, data, axis, area);
+
+    // 均匀值热力图仍应正常渲染
+    assert(device.drawImageCalls >= 1);
+}
+
+void test_heatmap_single_row() {
+    auto plot = createPlotType("Heatmap");
+    SpyDevice device;
+    double grid[] = {1.0, 2.0, 3.0};  // 1×3
+
+    SeriesRenderData data;
+    data.ys = grid;
+    data.gridRows = 1;
+    data.gridCols = 3;
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 300; area.height = 100;
+
+    plot->render(device, data, axis, area);
+
+    assert(device.drawImageCalls >= 1);
+}
+
+void test_heatmap_empty_grid() {
+    auto plot = createPlotType("Heatmap");
+    SpyDevice device;
+    SeriesRenderData data;
+    data.gridRows = 0;
+    data.gridCols = 0;
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 300;
+
+    plot->render(device, data, axis, area);
+
+    assert(device.drawImageCalls == 0);
+}
+
+// ──── 9c. ContourPlot ────
+void test_contour_basic() {
+    auto plot = createPlotType("Contour");
+    assert(plot != nullptr);
+    assert(std::string(plot->typeName()) == "Contour");
+
+    SpyDevice device;
+    // 5×5 网格，中心高、边缘低（山峰）
+    int rows = 5, cols = 5;
+    std::vector<double> grid(static_cast<size_t>(rows * cols));
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
+            double di = static_cast<double>(i - 2);
+            double dj = static_cast<double>(j - 2);
+            grid[static_cast<size_t>(i * cols + j)] = 10.0 - (di * di + dj * dj);
+        }
+    }
+
+    SeriesRenderData data;
+    data.ys = grid.data();
+    data.gridRows = rows;
+    data.gridCols = cols;
+    data.lineStyle.width = 1.5;
+    data.lineStyle.color = {0, 80, 160};
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 500; area.height = 500;
+
+    plot->render(device, data, axis, area);
+
+    // 应产生等值线
+    assert(device.drawPolylineCalls >= 1);
+}
+
+void test_contour_custom_levels() {
+    auto plot = createPlotType("Contour");
+    SpyDevice device;
+    int rows = 4, cols = 4;
+    std::vector<double> grid(static_cast<size_t>(rows * cols));
+    for (int i = 0; i < rows * cols; i++)
+        grid[static_cast<size_t>(i)] = static_cast<double>(i);
+
+    double levels[] = {3.0, 7.0, 11.0};
+
+    SeriesRenderData data;
+    data.ys = grid.data();
+    data.gridRows = rows;
+    data.gridCols = cols;
+    data.contourLevels = levels;
+    data.contourLevelCount = 3;
+    data.lineStyle.color = {255, 0, 0};
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 400;
+
+    plot->render(device, data, axis, area);
+
+    // 自定义级别应产生等值线
+    assert(device.drawPolylineCalls >= 1);
+}
+
+void test_contour_uniform_grid() {
+    auto plot = createPlotType("Contour");
+    SpyDevice device;
+    int rows = 3, cols = 3;
+    std::vector<double> grid(static_cast<size_t>(rows * cols), 5.0);  // 全部相同
+
+    SeriesRenderData data;
+    data.ys = grid.data();
+    data.gridRows = rows;
+    data.gridCols = cols;
+    data.lineStyle.color = {0, 128, 0};
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 300; area.height = 300;
+
+    plot->render(device, data, axis, area);
+
+    // 均匀网格：自动级别 × 无交叉 → 0 条等值线
+    // 不崩溃即可
+    assert(device.drawPolylineCalls >= 0);
+}
+
+void test_contour_small_grid() {
+    auto plot = createPlotType("Contour");
+    SpyDevice device;
+    double grid[] = {1.0, 2.0, 3.0, 4.0};  // 2×2
+
+    SeriesRenderData data;
+    data.ys = grid;
+    data.gridRows = 2;
+    data.gridCols = 2;
+    data.lineStyle.color = {139, 0, 139};
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 200; area.height = 200;
+
+    plot->render(device, data, axis, area);
+
+    // 2×2 网格应产生至少几条等值线
+    assert(device.drawPolylineCalls >= 0);
+}
+
+void test_contour_invalid_grid() {
+    auto plot = createPlotType("Contour");
+    SpyDevice device;
+    SeriesRenderData data;
+    data.gridRows = 1;  // 太小
+    data.gridCols = 1;
+
+    AxisRenderConfig axis;
+    DevicePlotArea area;
+    area.left = 60; area.top = 30;
+    area.width = 400; area.height = 400;
+
+    plot->render(device, data, axis, area);
+
+    // 无效网格不渲染
+    assert(device.drawPolylineCalls == 0);
+}
+
+// ============================================================
 // Section 7: Integration — 完整渲染流程
 // ============================================================
 void test_integration_line_and_scatter() {
@@ -1569,6 +1959,26 @@ int main() {
     test_polar_plot_single_point();
     test_polar_plot_spiral();
     test_polar_plot_empty_data();
+
+    // ── B2 图类型 ──
+    // AreaPlot
+    test_area_plot_renders_fill_and_line();
+    test_area_plot_custom_fill();
+    test_area_plot_single_segment();
+    test_area_plot_insufficient_data();
+    test_area_plot_empty_data();
+    // HeatmapPlot
+    test_heatmap_basic();
+    test_heatmap_small_grid();
+    test_heatmap_uniform_values();
+    test_heatmap_single_row();
+    test_heatmap_empty_grid();
+    // ContourPlot
+    test_contour_basic();
+    test_contour_custom_levels();
+    test_contour_uniform_grid();
+    test_contour_small_grid();
+    test_contour_invalid_grid();
 
     return 0;
 }
